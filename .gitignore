@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Database (local data - don't commit personal data)
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+output*.txt
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+.dockerignore
