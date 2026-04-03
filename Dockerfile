@@ -9,6 +9,9 @@ RUN npm install --omit=dev
 # Copy application files
 COPY server.js .
 COPY index.html .
+COPY manifest.json .
+COPY sw.js .
+COPY icons/ ./icons/
 
 # Create data directory for SQLite persistence
 RUN mkdir -p /app/data
