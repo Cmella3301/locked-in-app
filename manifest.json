@@ -6,7 +6,7 @@
   "display": "fullscreen",
   "display_override": ["window-controls-overlay", "minimal-ui"],
   "background_color": "#080810",
-  "theme_color": "#7c6fff",
+  "theme_color": "#080810",
   "orientation": "portrait-primary",
   "icons": [
     {
