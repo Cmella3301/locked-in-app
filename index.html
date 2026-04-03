@@ -457,19 +457,34 @@
             padding: 10px 6px;
             border-radius: 12px;
             border: 1px solid transparent;
-            transition: all 0.2s;
-            cursor: default;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
             opacity: 0.35;
+            position: relative;
         }
 
         .rank-badge.unlocked {
             opacity: 1;
         }
 
+        .rank-badge.unlocked:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 10px 20px -8px currentColor;
+            z-index: 10;
+        }
+
         .rank-badge.current {
             border-color: currentColor;
             background: rgba(255, 255, 255, 0.04);
             box-shadow: 0 0 16px -4px currentColor;
+            transform: translateY(-2px);
+            animation: float-rank 3s ease-in-out infinite;
+        }
+
+        @keyframes float-rank {
+            0% { transform: translateY(-2px); box-shadow: 0 0 16px -4px currentColor; }
+            50% { transform: translateY(-6px); box-shadow: 0 8px 24px -2px currentColor; }
+            100% { transform: translateY(-2px); box-shadow: 0 0 16px -4px currentColor; }
         }
 
         .rank-badge-icon {
@@ -3098,7 +3113,14 @@
 
             // week bars
             const mx = Math.max(...S.weekXp, 1);
-            const dn = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+            const dayNamesArr = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+            const dn = [];
+            const currentDayNum = new Date().getDay();
+            for (let i = 6; i >= 0; i--) {
+                let d = currentDayNum - i;
+                if (d < 0) d += 7;
+                dn.push(dayNamesArr[d]);
+            }
             document.getElementById('week-bars').innerHTML = S.weekXp.map((v, i) => `<div class="wbar-wrap"><div class="wbar ${i === 6 ? 'today' : ''}" style="height:${Math.max(Math.round(v / mx * 100), v > 0 ? 4 : 0)}%"></div></div>`).join('');
             document.getElementById('week-days').innerHTML = dn.map((d, i) => `<div style="flex:1;text-align:center;font-size:9px;color:${i === 6 ? 'var(--purple)' : 'var(--muted)'};">${d}</div>`).join('');
 
