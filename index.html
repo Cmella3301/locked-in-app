@@ -26,7 +26,15 @@
         });
       }
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.0/vanilla-tilt.min.js"></script>
     <style>
+        @keyframes coin-flip {
+            0% { transform: perspective(800px) rotateY(0deg); }
+            100% { transform: perspective(800px) rotateY(360deg); }
+        }
+        .coin-flip-anim {
+            animation: coin-flip 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
         :root {
             --bg: #080810;
             --bg2: #0f0f1a;
@@ -1816,6 +1824,105 @@
             color: var(--muted);
             margin-top: 8px;
         }
+
+        /* Trophy Room */
+        .trophy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            padding: 10px 0;
+        }
+
+        .trophy-card {
+            background: var(--bg3);
+            border-radius: 16px;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid var(--border);
+            position: relative;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .trophy-card.locked {
+            opacity: 0.5;
+            filter: grayscale(100%) brightness(0.6);
+            cursor: not-allowed;
+        }
+
+        .trophy-lock-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+            display: none;
+        }
+
+        .trophy-card.locked .trophy-lock-overlay {
+            display: flex;
+        }
+
+        .trophy-badge {
+            width: 120px;
+            height: 120px;
+            position: relative;
+            margin-bottom: 20px;
+            z-index: 2;
+        }
+
+        .trophy-card.locked .trophy-badge {
+            filter: blur(10px);
+        }
+
+        .trophy-badge img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .trophy-name {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            text-align: center;
+            margin-bottom: 6px;
+            z-index: 2;
+        }
+
+        .trophy-req {
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+            z-index: 2;
+            padding: 5px 12px;
+            background: var(--bg2);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            font-weight: 500;
+        }
+
+        .trophy-card.unlocked {
+            box-shadow: 0 0 40px -10px var(--glow-color);
+            border-color: var(--glow-color);
+        }
+
+        .trophy-card.unlocked:hover {
+            transform: translateY(-5px);
+        }
     </style>
 </head>
 
@@ -2498,6 +2605,22 @@
         </div>
     </div>
 
+    <!-- TROPHIES -->
+    <div class="screen" id="screen-badges">
+        <div class="desktop-grid">
+            <div class="col" style="flex: 1; grid-column: span 3;">
+                <div class="card" style="border:none; background:transparent; padding:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <span class="card-title" style="margin:0; font-size:24px; color:var(--text); text-transform:none; letter-spacing:0;">🎖️ Rank Showcase</span>
+                    </div>
+                    <div class="trophy-grid" id="trophies-grid">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="bottom-nav">
         <button class="nav-item active" onclick="showScreen('home',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2551,6 +2674,12 @@
                 <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
             Tracking<div class="nav-dot"></div>
+        </button>
+        <button class="nav-item" onclick="showScreen('badges',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            Trophies<div class="nav-dot"></div>
         </button>
     </div>
 
@@ -2641,15 +2770,15 @@
         checkNewDay();
 
         const ranks = [
-            { name: 'Bronze', min: 0, color: '#cd7f32', bg: '#2d1a10', badge: `<img src="/icons/ranks/rank_01_bronze_1775240647966.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Silver', min: 500, color: '#b8b8cc', bg: '#28283a', badge: `<img src="/icons/ranks/rank_02_silver_1775240661273.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Gold', min: 1500, color: '#ffd700', bg: '#2d2a10', badge: `<img src="/icons/ranks/rank_03_gold_1775240673324.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Opal I', min: 3000, color: '#a0c4ff', bg: '#1a2040', badge: `<img src="/icons/ranks/rank_04_opal1_1775240693700.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Opal II', min: 5000, color: '#7c6fff', bg: '#2a2040', badge: `<img src="/icons/ranks/rank_05_opal2_1775240707721.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Opal III', min: 8000, color: '#c8b8ff', bg: '#2a2040', badge: `<img src="/icons/ranks/rank_06_opal3_1775240723165.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Diamond', min: 12000, color: '#88eeff', bg: '#102028', badge: `<img src="/icons/ranks/rank_07_diamond_1775240745120.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Elite', min: 20000, color: '#ff88aa', bg: '#2d1020', badge: `<img src="/icons/ranks/rank_08_elite_1775240760871.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
-            { name: 'Champion', min: 35000, color: '#ffcc00', bg: '#2d2800', badge: `<img src="/icons/ranks/rank_09_champion_1775240775220.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Bronze', min: 0, color: '#cd7f32', bg: '#2d1a10', badge: `<img src="/icons/ranks/rank_01_bronze_1775240647966.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Silver', min: 500, color: '#b8b8cc', bg: '#28283a', badge: `<img src="/icons/ranks/rank_02_silver_1775240661273.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Gold', min: 1500, color: '#ffd700', bg: '#2d2a10', badge: `<img src="/icons/ranks/rank_03_gold_1775240673324.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Opal I', min: 3000, color: '#a0c4ff', bg: '#1a2040', badge: `<img src="/icons/ranks/rank_04_opal1_1775240693700.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Opal II', min: 5000, color: '#7c6fff', bg: '#2a2040', badge: `<img src="/icons/ranks/rank_05_opal2_1775240707721.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Opal III', min: 8000, color: '#c8b8ff', bg: '#2a2040', badge: `<img src="/icons/ranks/rank_06_opal3_1775240723165.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Diamond', min: 12000, color: '#88eeff', bg: '#102028', badge: `<img src="/icons/ranks/rank_07_diamond_1775240745120.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Elite', min: 20000, color: '#ff88aa', bg: '#2d1020', badge: `<img src="/icons/ranks/rank_08_elite_1775240760871.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
+            { name: 'Champion', min: 35000, color: '#ffcc00', bg: '#2d2800', badge: `<img src="/icons/ranks/rank_09_champion_1775240775220.png" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(0,0,0,0.5));" />` },
         ];
         const getRank = () => { let r = ranks[0]; for (const rk of ranks) { if (S.totalXp >= rk.min) r = rk; } return r; };
         const getNext = () => { for (let i = 0; i < ranks.length - 1; i++) { if (S.totalXp < ranks[i + 1].min) return ranks[i + 1]; } return null; };
@@ -3086,6 +3215,23 @@
             }).join('');
             if (nrk) { const p = (S.totalXp - rk.min) / (nrk.min - rk.min); document.getElementById('rank-bar').style.width = Math.round(p * 100) + '%'; document.getElementById('rank-progress-label').textContent = `Progress to ${nrk.name}`; document.getElementById('rank-xp-label').textContent = `${S.totalXp - rk.min} / ${nrk.min - rk.min} XP needed`; }
 
+            if (typeof VanillaTilt !== 'undefined') {
+                VanillaTilt.init(document.querySelectorAll(".rank-badge-icon img"), {
+                    max: 35,
+                    speed: 400,
+                    glare: true,
+                    "max-glare": 0.4,
+                    scale: 1.15
+                });
+                VanillaTilt.init(document.querySelectorAll("#ovr-badge-icon img"), {
+                    max: 20,
+                    speed: 400,
+                    glare: true,
+                    "max-glare": 0.3,
+                    scale: 1.2
+                });
+            }
+
             // dynamic XP breakdown — built from all rings + standard categories
             const bd = S.xpBreakdown || {};
             const allRingXp = RINGS.filter(r => r.id !== 'habits').map(r => `<div class="xp-row"><span style="color:var(--muted)">${r.label}</span><span style="color:${r.color}">${bd[r.id] || 0} XP</span></div>`).join('');
@@ -3130,6 +3276,35 @@
             renderPhotos();
             renderBudget();
             renderTracking();
+            renderTrophyRoom();
+        }
+
+        function renderTrophyRoom() {
+            const grid = document.getElementById('trophies-grid');
+            if(!grid) return;
+            
+            grid.innerHTML = ranks.map(r => {
+                const unlocked = S.totalXp >= r.min;
+                return `<div class="trophy-card ${unlocked ? 'unlocked' : 'locked'}" style="${unlocked ? '--glow-color: '+r.color+'33;' : ''}">
+                    <div class="trophy-badge">
+                        ${r.badge}
+                    </div>
+                    <div class="trophy-lock-overlay">🔒</div>
+                    <div class="trophy-name" style="color: ${unlocked ? r.color : '#888'}">${unlocked ? r.name : '???'}</div>
+                    <div class="trophy-req">${r.min === 0 ? 'Starter Badge' : r.min.toLocaleString() + ' XP to unlock'}</div>
+                </div>`;
+            }).join('');
+            
+            if (typeof VanillaTilt !== 'undefined') {
+                VanillaTilt.init(document.querySelectorAll("#trophies-grid .unlocked .trophy-badge img"), {
+                    max: 35,
+                    speed: 400,
+                    glare: true,
+                    "max-glare": 0.5,
+                    scale: 1.25,
+                    perspective: 800
+                });
+            }
         }
 
         const rxBg = { 'Housing': '#1e253c', 'Food': '#3c221e', 'Transport': '#3c311e', 'Health': '#1e3c23', 'Entertainment': '#3c1e34', 'Shopping': '#261e3c', 'Savings': '#193d25', 'Other': '#2a2a3a', 'Salary': '#193d25' };
@@ -3617,6 +3792,28 @@
 
         // Initialize active day summary on load
         setTimeout(() => selectCalDay(activeCalDay), 100);
+
+        // 3D Coin Flip Logic
+        document.addEventListener('click', e => {
+            const badge = e.target.closest('.rank-badge') || e.target.closest('.trophy-card.unlocked');
+            if (badge) {
+                const iconContainer = badge.querySelector('.rank-badge-icon') || badge.querySelector('.trophy-badge');
+                if (iconContainer && !iconContainer.classList.contains('coin-flip-anim')) {
+                    iconContainer.classList.add('coin-flip-anim');
+                    iconContainer.style.transformStyle = 'preserve-3d'; 
+                    setTimeout(() => iconContainer.classList.remove('coin-flip-anim'), 850);
+                }
+            }
+            
+            if (e.target.closest('#ovr-badge-icon')) {
+                const iconContainer = document.getElementById('ovr-badge-icon');
+                if (iconContainer && !iconContainer.classList.contains('coin-flip-anim')) {
+                    iconContainer.classList.add('coin-flip-anim');
+                    iconContainer.style.transformStyle = 'preserve-3d';
+                    setTimeout(() => iconContainer.classList.remove('coin-flip-anim'), 850);
+                }
+            }
+        });
 
         renderAll();
     </script>
