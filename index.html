@@ -2641,68 +2641,15 @@
         checkNewDay();
 
         const ranks = [
-            {
-                name: 'Bronze', min: 0, color: '#cd7f32', bg: '#2d1a10',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,4 28,16 40,16 30,24 34,36 24,28 14,36 18,24 8,16 20,16" fill="#cd7f32" opacity="0.9"/>
-    <polygon points="24,4 28,16 40,16 30,24 34,36 24,28 14,36 18,24 8,16 20,16" fill="none" stroke="#e8a050" stroke-width="1.5"/>
-    <text x="24" y="27" text-anchor="middle" font-size="9" font-weight="bold" fill="#3a1a00">I</text></svg>`},
-            {
-                name: 'Silver', min: 500, color: '#b8b8cc', bg: '#28283a',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,4 28,16 40,16 30,24 34,36 24,28 14,36 18,24 8,16 20,16" fill="#888899" opacity="0.9"/>
-    <polygon points="24,4 28,16 40,16 30,24 34,36 24,28 14,36 18,24 8,16 20,16" fill="none" stroke="#ccccdd" stroke-width="1.5"/>
-    <line x1="18" y1="20" x2="30" y2="20" stroke="#ddd" stroke-width="1.5"/><line x1="24" y1="20" x2="24" y2="30" stroke="#ddd" stroke-width="1.5"/></svg>`},
-            {
-                name: 'Gold', min: 1500, color: '#ffd700', bg: '#2d2a10',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,3 29,17 44,17 32,26 37,40 24,31 11,40 16,26 4,17 19,17" fill="#e8a800" opacity="0.95"/>
-    <polygon points="24,3 29,17 44,17 32,26 37,40 24,31 11,40 16,26 4,17 19,17" fill="none" stroke="#ffe566" stroke-width="1.5"/>
-    <circle cx="24" cy="24" r="5" fill="#ffe566" opacity="0.6"/></svg>`},
-            {
-                name: 'Opal I', min: 3000, color: '#a0c4ff', bg: '#1a2040',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,4 34,14 44,24 34,34 24,44 14,34 4,24 14,14" fill="#2a4080" opacity="0.9"/>
-    <polygon points="24,4 34,14 44,24 34,34 24,44 14,34 4,24 14,14" fill="none" stroke="#a0c4ff" stroke-width="1.5"/>
-    <polygon points="24,12 30,18 36,24 30,30 24,36 18,30 12,24 18,18" fill="none" stroke="#c8e0ff" stroke-width="0.8" opacity="0.6"/></svg>`},
-            {
-                name: 'Opal II', min: 5000, color: '#7c6fff', bg: '#2a2040',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,4 34,14 44,24 34,34 24,44 14,34 4,24 14,14" fill="#3a2880" opacity="0.9"/>
-    <polygon points="24,4 34,14 44,24 34,34 24,44 14,34 4,24 14,14" fill="none" stroke="#9080ff" stroke-width="1.5"/>
-    <polygon points="24,12 30,18 36,24 30,30 24,36 18,30 12,24 18,18" fill="none" stroke="#b0a0ff" stroke-width="1"/>
-    <circle cx="24" cy="24" r="3" fill="#7c6fff"/></svg>`},
-            {
-                name: 'Opal III', min: 8000, color: '#c8b8ff', bg: '#2a2040',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,4 34,14 44,24 34,34 24,44 14,34 4,24 14,14" fill="#4a38a0" opacity="0.9"/>
-    <polygon points="24,4 34,14 44,24 34,34 24,44 14,34 4,24 14,14" fill="none" stroke="#c8b8ff" stroke-width="2"/>
-    <polygon points="24,12 30,18 36,24 30,30 24,36 18,30 12,24 18,18" fill="none" stroke="#e0d8ff" stroke-width="1"/>
-    <circle cx="24" cy="24" r="4" fill="#c8b8ff" opacity="0.8"/>
-    <circle cx="24" cy="24" r="2" fill="#fff" opacity="0.6"/></svg>`},
-            {
-                name: 'Diamond', min: 12000, color: '#88eeff', bg: '#102028',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,4 40,20 24,44 8,20" fill="#1a4455" opacity="0.9"/>
-    <polygon points="24,4 40,20 24,44 8,20" fill="none" stroke="#88eeff" stroke-width="2"/>
-    <polygon points="24,12 34,20 24,36 14,20" fill="none" stroke="#ccf8ff" stroke-width="1"/>
-    <line x1="8" y1="20" x2="40" y2="20" stroke="#88eeff" stroke-width="1" opacity="0.5"/>
-    <circle cx="24" cy="20" r="2" fill="#ccf8ff"/></svg>`},
-            {
-                name: 'Elite', min: 20000, color: '#ff88aa', bg: '#2d1020',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,3 29,17 44,17 32,26 37,40 24,31 11,40 16,26 4,17 19,17" fill="#600030" opacity="0.9"/>
-    <polygon points="24,3 29,17 44,17 32,26 37,40 24,31 11,40 16,26 4,17 19,17" fill="none" stroke="#ff88aa" stroke-width="2"/>
-    <polygon points="24,10 27,19 37,19 29,25 32,34 24,28 16,34 19,25 11,19 21,19" fill="#ff88aa" opacity="0.25"/>
-    <circle cx="24" cy="22" r="3" fill="#ff88aa" opacity="0.8"/></svg>`},
-            {
-                name: 'Champion', min: 35000, color: '#ffcc00', bg: '#2d2800',
-                badge: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="24,2 30,18 46,18 33,28 38,44 24,34 10,44 15,28 2,18 18,18" fill="#8a6000" opacity="0.9"/>
-    <polygon points="24,2 30,18 46,18 33,28 38,44 24,34 10,44 15,28 2,18 18,18" fill="none" stroke="#ffcc00" stroke-width="2"/>
-    <polygon points="24,10 28,20 39,20 30,26 34,36 24,30 14,36 18,26 9,20 20,20" fill="#ffcc00" opacity="0.3"/>
-    <circle cx="24" cy="23" r="4" fill="#ffdd44"/>
-    <circle cx="24" cy="23" r="2" fill="#fff8cc"/></svg>`},
+            { name: 'Bronze', min: 0, color: '#cd7f32', bg: '#2d1a10', badge: `<img src="/icons/ranks/rank_01_bronze_1775240647966.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Silver', min: 500, color: '#b8b8cc', bg: '#28283a', badge: `<img src="/icons/ranks/rank_02_silver_1775240661273.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Gold', min: 1500, color: '#ffd700', bg: '#2d2a10', badge: `<img src="/icons/ranks/rank_03_gold_1775240673324.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Opal I', min: 3000, color: '#a0c4ff', bg: '#1a2040', badge: `<img src="/icons/ranks/rank_04_opal1_1775240693700.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Opal II', min: 5000, color: '#7c6fff', bg: '#2a2040', badge: `<img src="/icons/ranks/rank_05_opal2_1775240707721.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Opal III', min: 8000, color: '#c8b8ff', bg: '#2a2040', badge: `<img src="/icons/ranks/rank_06_opal3_1775240723165.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Diamond', min: 12000, color: '#88eeff', bg: '#102028', badge: `<img src="/icons/ranks/rank_07_diamond_1775240745120.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Elite', min: 20000, color: '#ff88aa', bg: '#2d1020', badge: `<img src="/icons/ranks/rank_08_elite_1775240760871.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
+            { name: 'Champion', min: 35000, color: '#ffcc00', bg: '#2d2800', badge: `<img src="/icons/ranks/rank_09_champion_1775240775220.png" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;" />` },
         ];
         const getRank = () => { let r = ranks[0]; for (const rk of ranks) { if (S.totalXp >= rk.min) r = rk; } return r; };
         const getNext = () => { for (let i = 0; i < ranks.length - 1; i++) { if (S.totalXp < ranks[i + 1].min) return ranks[i + 1]; } return null; };
@@ -3054,7 +3001,7 @@
             document.getElementById('streak-nav').textContent = S.streak;
             const rk = getRank(), nrk = getNext();
             document.getElementById('ovr-badge-icon').innerHTML = rk.badge;
-            const rankSvg = document.querySelector('#ovr-badge-icon svg');
+            const rankSvg = document.querySelector('#ovr-badge-icon img') || document.querySelector('#ovr-badge-icon svg');
             if (rankSvg) rankSvg.style.filter = `drop-shadow(0 0 6px ${rk.color}40)`;
             document.getElementById('rank-nav').textContent = rk.name;
             document.getElementById('ovr-nav').textContent = Math.min(99, Math.round(50 + S.totalXp / 600));
