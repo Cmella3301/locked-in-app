@@ -1,5 +1,5 @@
 {
-  "name": "lock-in-app",
+  "name": "locked-in-app",
   "version": "1.0.0",
   "description": "Self-hosted habit tracking and productivity app",
   "main": "server.js",
