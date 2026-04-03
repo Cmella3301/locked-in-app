@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lockin-v2';
+const CACHE_NAME = 'lockin-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
