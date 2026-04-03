@@ -13,6 +13,13 @@ A powerful, self-hosted habit tracking and productivity management application b
 - 🎮 Gamification with XP system
 - 📈 Comprehensive statistics and rankings
 
+## 🤖 AI Assistant Installation (For ChatGPT/Claude)
+
+If you use an AI assistant like Claude, ChatGPT, or Cursor, you can have it completely install and set up this app for you. Simply copy and paste the prompt below into your AI:
+
+> **Copy & Paste this to your AI:**
+> *"I want to run a self-hosted productivity app called 'locked-in-app' on my machine. Please give me the exact terminal commands to clone the repository (from Cmella3301/locked-in-app), navigate into the folder, and spin it up using Docker Compose. If I don't have Docker installed, briefly tell me how to get it for my OS first. Once the container is running, tell me what localhost port to open, and explain how I can save it as a PWA on my phone or computer."*
+
 ## Quick Start
 
 ### Option 1: Docker (Recommended)
