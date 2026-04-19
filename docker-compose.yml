@@ -9,12 +9,26 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - lock-in-data:/app/data
+      - ./data:/app/data
+      - ./.env:/app/.env
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - GEMINI_API_KEY=AIzaSyA-Vt0fA85tFGkowJ_kdr7f21RGtqxmMcM
     restart: unless-stopped
 
-volumes:
-  lock-in-data:
-    driver: local
+  lock-in-gf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lock-in-app-gf
+    ports:
+      - "3333:3001"
+    volumes:
+      - ./data-gf:/app/data
+      - ./.env:/app/.env
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - GEMINI_API_KEY=AIzaSyA-Vt0fA85tFGkowJ_kdr7f21RGtqxmMcM
+    restart: unless-stopped

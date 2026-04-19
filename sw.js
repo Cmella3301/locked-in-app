@@ -2,6 +2,7 @@ const CACHE_NAME = 'lockin-v3.3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/watch',
   '/manifest.json'
 ];
 
@@ -32,9 +33,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Always go to network for API calls
-  if (url.pathname.startsWith('/api/')) {
+  if (url.pathname.includes('/api/')) {
     event.respondWith(
-      fetch(event.request).catch(() => {
+      fetch(event.request, { cache: 'no-store' }).catch(() => {
         return new Response(JSON.stringify({ error: 'Offline - API unavailable' }), {
           headers: { 'Content-Type': 'application/json' }
         });

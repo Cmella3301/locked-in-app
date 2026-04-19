@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LOCK-IN Watch</title>
+    <style>
+        :root {
+            --bg: #000;
+            --accent: #00f2ff;
+            --text: #fff;
+            --card-bg: #111;
+        }
+        body {
+            margin: 0;
+            padding: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-x: hidden;
+        }
+        .header {
+            text-align: center;
+            font-weight: 800;
+            font-size: 0.8rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        .btn {
+            background: var(--card-bg);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 15px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:active {
+            transform: scale(0.95);
+            background: #222;
+        }
+        .btn.met {
+            border-color: var(--accent);
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.2);
+        }
+        .icon {
+            font-size: 1.5rem;
+        }
+        .info {
+            flex: 1;
+            margin-left: 10px;
+            text-align: left;
+        }
+        .label {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .value {
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+        .toast {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: #000;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">LOCK-IN ⚔️</div>
+    
+    <div class="grid" id="watchGrid">
+        <!-- Water -->
+        <div class="btn" onclick="updateRing('water', 1)">
+            <span class="icon">💧</span>
+            <div class="info">
+                <div class="label">Water</div>
+                <div class="value" id="waterVal">0 / 8</div>
+            </div>
+        </div>
+
+        <!-- Brush -->
+        <div class="btn" id="brushBtn" onclick="toggleRing('brush')">
+            <span class="icon">🪥</span>
+            <div class="info">
+                <div class="label">Brush Teeth</div>
+                <div class="value" id="brushState">Incomplete</div>
+            </div>
+        </div>
+
+        <!-- Floss -->
+        <div class="btn" id="flossBtn" onclick="toggleRing('floss')">
+            <span class="icon">🧵</span>
+            <div class="info">
+                <div class="label">Floss</div>
+                <div class="value" id="flossState">Incomplete</div>
+            </div>
+        </div>
+
+        <!-- Workout -->
+        <div class="btn" id="workoutBtn" onclick="toggleRing('workout')">
+            <span class="icon">🏋️‍♂️</span>
+            <div class="info">
+                <div class="label">Workout</div>
+                <div class="value" id="workoutState">Incomplete</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">LOCKED IN</div>
+
+    <script>
+        let currentData = null;
+
+        async function refreshData() {
+            try {
+                const res = await fetch('/api/data');
+                currentData = await res.json();
+                render();
+            } catch (e) {
+                console.error("Wait for server...");
+            }
+        }
+
+        function render() {
+            if (!currentData) return;
+
+            // Water
+            const water = currentData.currentValues.water || { value: 0, goal: 8 };
+            document.getElementById('waterVal').innerText = `${water.value} / ${water.goal}`;
+            
+            // Brush
+            const brush = currentData.currentValues.brush || { met: 0 };
+            document.getElementById('brushState').innerText = brush.met ? 'COMPLETED' : 'INCOMPLETE';
+            document.getElementById('brushBtn').classList.toggle('met', brush.met);
+
+            // Floss
+            const floss = currentData.currentValues.floss || { met: 0 };
+            document.getElementById('flossState').innerText = floss.met ? 'COMPLETED' : 'INCOMPLETE';
+            document.getElementById('flossBtn').classList.toggle('met', floss.met);
+
+            // Workout
+            const workout = currentData.currentValues.workout || { met: 0 };
+            document.getElementById('workoutState').innerText = workout.met ? 'COMPLETED' : 'INCOMPLETE';
+            document.getElementById('workoutBtn').classList.toggle('met', workout.met);
+        }
+
+        async function updateRing(ringId, increment) {
+            const current = currentData.currentValues[ringId] || { value: 0, goal: 8 };
+            const newValue = (current.value || 0) + increment;
+            
+            await fetch(`/api/ring/${ringId}/value`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    value: newValue,
+                    goal: current.goal,
+                    met: newValue >= current.goal
+                })
+            });
+            showToast();
+            refreshData();
+        }
+
+        async function toggleRing(ringId) {
+            const current = currentData.currentValues[ringId] || { met: 0, goal: 1 };
+            const nowMet = !current.met;
+
+            await fetch(`/api/ring/${ringId}/value`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    value: nowMet ? 1 : 0,
+                    goal: 1,
+                    met: nowMet
+                })
+            });
+            showToast();
+            refreshData();
+        }
+
+        function showToast() {
+            const t = document.getElementById('toast');
+            t.style.opacity = '1';
+            setTimeout(() => t.style.opacity = '0', 1000);
+        }
+
+        // Initial load
+        refreshData();
+        setInterval(refreshData, 10000); // Polling for watch sync
+    </script>
+</body>
+</html>

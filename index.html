@@ -15,6 +15,9 @@
     <meta name="apple-mobile-web-app-title" content="LOCK-IN" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    
+    <!-- iOS Splash Screens -->
+    <link rel="apple-touch-startup-image" href="/icons/icon-512.png">
 
     <!-- Service Worker Registration -->
     <script>
@@ -575,6 +578,27 @@
             padding: 7px 12px;
             cursor: pointer;
             white-space: nowrap;
+        }
+
+        .set-node {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg3);
+            color: transparent;
+        }
+        
+        .set-node:hover {
+            border-color: var(--purple);
+            transform: scale(1.1);
         }
 
         .muscle-checkbox-grid {
@@ -1923,6 +1947,105 @@
         .trophy-card.unlocked:hover {
             transform: translateY(-5px);
         }
+        /* AI Coach Conversational UI Styles */
+        #screen-ai-coach {
+            height: calc(100vh - 160px);
+            padding: 0;
+            overflow: hidden;
+        }
+        #screen-ai-coach.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+            animation: bubbleIn 0.3s ease-out;
+        }
+
+        @keyframes bubbleIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .bubble-coach {
+            align-self: flex-start;
+            background: rgba(43, 43, 63, 0.7);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .bubble-user {
+            align-self: flex-end;
+            background: var(--purple-grad);
+            color: #fff;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 12px rgba(124, 111, 255, 0.2);
+        }
+
+        .chat-input-row {
+            padding: 12px 16px;
+            background: var(--bg2);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 16px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            border-color: var(--purple);
+        }
+
+        .chat-send-btn {
+            background: var(--purple);
+            color: #fff;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .chat-send-btn:active {
+            transform: scale(0.9);
+        }
     </style>
 </head>
 
@@ -2170,8 +2293,14 @@
             <div class="col" style="grid-column:2/4;">
                 <div class="card">
                     <div class="card-title">Log food</div>
-                    <div class="food-input-row">
+                    <div class="food-input-row" style="flex-wrap:wrap;">
                         <input type="text" id="food-name" placeholder="Food name" style="flex:2;min-width:160px;" />
+                        <div style="display:flex; gap:6px; flex:1; min-width:120px;">
+                            <button onclick="triggerMealScan()" class="ai-btn-scan" style="background:var(--bg3); border:1px solid var(--border); box-shadow:none; color:var(--text); padding:4px 10px; border-radius:8px; cursor:pointer; font-size:11px; font-weight:600;">
+                                📷 Scan
+                            </button>
+                            <input type="file" id="meal-camera-input" accept="image/*" capture="environment" style="display:none;" onchange="analyzeMeal(event)" />
+                        </div>
                         <input type="number" id="food-cals" placeholder="Calories" />
                         <input type="number" id="food-protein" placeholder="Protein g" />
                         <input type="number" id="food-carbs" placeholder="Carbs g" />
@@ -2603,6 +2732,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- DANGER ZONE -->
+        <div class="card" style="margin-top: 24px; border-color: #441a1a; background: #1a0808;">
+            <div class="card-title" style="color: #ff4444;">Danger Zone</div>
+            <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">Resetting will wipe all historical data, streaks, and progress. This cannot be undone.</p>
+            <button onclick="fullReset()" style="background: #ff4444; color: #fff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">🔥 Reset to Day 0</button>
+        </div>
+    </div>
+
+    <!-- AI COACH CHAT -->
+    <div class="screen" id="screen-ai-coach">
+        <div style="display: flex; justify-content: flex-end; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg2);">
+            <button onclick="clearChat()" style="background: rgba(255,255,255,0.1); color: var(--muted); border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s;">🧹 Clear Chat</button>
+        </div>
+        <div class="chat-wrap" id="chat-container">
+            <!-- Messages render here -->
+        </div>
+        <div id="chat-image-preview-container" style="display:none; padding: 10px 16px; background: var(--bg2); border-top: 1px solid var(--border); position: relative; gap: 8px; overflow-x: auto; white-space: nowrap;">
+            <!-- Thumbnails injected via JS -->
+        </div>
+        <div class="chat-input-row" style="align-items: flex-end;">
+            <button class="chat-img-btn" onclick="document.getElementById('chat-file-input').click()" style="background:transparent; border:none; color:var(--muted); cursor:pointer; padding:6px; margin-bottom: 2px; transition:color 0.2s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                </svg>
+            </button>
+
+            <input type="file" id="chat-file-input" accept="image/*" multiple style="display:none;" onchange="handleChatImageUpload(event)" />
+            <textarea id="chat-input" class="chat-input" placeholder="Ask your coach anything..." oninput="autoExpand(this)" onkeydown="handleChatKey(event)"></textarea>
+            <button class="chat-send-btn" onclick="sendChatMessage()" style="margin-bottom: 2px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;">
+                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <!-- TROPHIES -->
@@ -2641,6 +2805,14 @@
                 <line x1="12" y1="8" x2="12" y2="16" />
             </svg>
             Calories<div class="nav-dot"></div>
+        </button>
+        <button class="nav-item" onclick="showScreen('ai-coach',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
+                <path d="M12 6v6l4 2" />
+                <circle cx="12" cy="12" r="3" fill="var(--purple)" fill-opacity="0.3" />
+            </svg>
+            AI Coach<div class="nav-dot"></div>
         </button>
         <button class="nav-item" onclick="showScreen('workout',this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2714,13 +2886,14 @@
                 { id: 14, name: 'Take vitamins', xp: 15, done: false },
             ],
             todos: [], xpToday: 0, xpGoal: 700, totalXp: 0,
-            streak: 0, bestStreak: 0, weekXp: [0, 0, 0, 0, 0, 0, 0],
+            streak: 1, bestStreak: 0, weekXp: [0, 0, 0, 0, 0, 0, 0],
             currentSplit: 'push', lastDate: new Date().toDateString(),
             visibleRings: ['water', 'budget', 'cals', 'xp', 'habits', 'sleep', 'steps', 'study', 'protein', 'vitamins'],
             sleep: 0, steps: 0, studyMins: 0, vitaminsTaken: false,
             xpBreakdown: { habits: 0, food: 0, water: 0, todos: 0 }, waterHabitDone: false,
             progressPhotos: [], customRings: [], transactions: [], budgetGoal: 3000, monthlyIncome: 0,
-            history: {}, journal: {}, schedule: [], longTermGoals: []
+            history: {}, journal: {}, schedule: [], longTermGoals: [], aiChatHistory: [],
+            workoutLogs: [], currentWorkoutDate: new Date().toDateString()
         };
 
         if (!S.transactions) S.transactions = [];
@@ -2729,6 +2902,9 @@
         if (!S.history) S.history = {};
         if (!S.journal) S.journal = {};
         if (!S.schedule) S.schedule = [];
+        if (!S.aiChatHistory) S.aiChatHistory = [];
+        if (!S.workoutLogs) S.workoutLogs = [];
+        if (!S.currentWorkoutDate) S.currentWorkoutDate = new Date().toDateString();
         if (!S.longTermGoals || S.longTermGoals.length === 0) {
             S.longTermGoals = [
                 { id: 1, title: 'Make $10,000', deadline: 'September 8, 2025', current: 10000, target: 10000, prefix: '$', suffix: '', color: '#1db87a' },
@@ -2736,7 +2912,164 @@
             ];
         }
 
-        function save() { localStorage.setItem('lockin_v3', JSON.stringify(S)); }
+        // SYNC: Load from Server OR LocalStorage fallback
+        async function loadState() {
+            try {
+                // Use a timestamp to force a fresh fetch from the server
+                const res = await fetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                const data = await res.json();
+                if (data) {
+                    // Critical merge: If server data is present, it's our sync source
+                    // But we merge gently to avoid losing very recent local wins
+                    if (data.streak >= S.streak) S.streak = data.streak;
+                    if (data.totalXp >= S.totalXp) S.totalXp = data.totalXp;
+                    
+                    // Always pull history and journal from server as it's the gold source
+                    if (data.history) S.history = data.history;
+                    if (data.journal) S.journal = data.journal;
+                    if (data.schedule) S.schedule = data.schedule;
+
+                    // If server data is from today, it's the source of truth for current progress
+                    const today = new Date().toDateString();
+                    if (data.lastDate === today) {
+                        // Merge server progress with local progress
+                        S = { ...S, ...data };
+                    }
+                    renderAll();
+                    console.log("State synced from server successfully.");
+                }
+            } catch (e) {
+                console.warn("Sync failed, using offline cache.");
+                // LocalStorage is already loaded into S at the top, so we just use it
+            }
+        }
+
+        async function save() {
+            localStorage.setItem('lockin_v3', JSON.stringify(S));
+            
+            // Show a visual hint that we are syncing
+            console.log("Syncing to server...");
+            
+            try {
+                const res = await fetch('/api/state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(S)
+                });
+                if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+                console.log("Sync complete.");
+            } catch (e) { 
+                console.error("Sync save failed:", e);
+                // Hint: If this happens, the JSON might still be too large or network is down
+            }
+        }
+
+        // Helper to compress images before saving to state
+        async function compressImage(base64Str, maxWidth = 1200, quality = 0.7) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = base64Str;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxWidth) {
+                            width *= maxWidth / height;
+                            height = maxWidth;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+            });
+        }
+
+        // AUTO-SYNC: Check for updates every 10 seconds (less aggressive to avoid conflicts)
+        setInterval(async () => {
+            try {
+                const res = await fetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                const data = await res.json();
+                
+                // Compare timestamps or hash to see if we truly need an update
+                if (data && JSON.stringify(data) !== JSON.stringify(S)) {
+                    // Check if server is actually "ahead" or just different
+                    // If server has more XP or higher streak, or it's a new day, we update
+                    const serverIsNewer = (data.totalXp > S.totalXp) || (data.streak > S.streak);
+                    
+                    if (serverIsNewer) {
+                        console.log("Global Sync: Server has newer progress. Updating...");
+                        S = { ...S, ...data };
+                        renderAll();
+                        localStorage.setItem('lockin_v3', JSON.stringify(S));
+                    }
+                }
+            } catch (e) {}
+        }, 10000);
+
+        loadState();
+
+        async function fullReset() {
+            if (!confirm("Are you SURE you want to reset everything to Day 0? This will delete all history, streaks, and custom rings. This cannot be undone.")) return;
+            
+            try {
+                // 1. Wipe server data
+                const res = await fetch('/api/reset', { method: 'POST' });
+                const result = await res.json();
+                
+                if (result.success) {
+                    // 2. Reset local state to defaults
+                    S = {
+                        water: 0, waterGoal: 2500, foods: [], calGoal: 2800,
+                        habits: [
+                            { id: 3, name: 'Night prayer', xp: 25, done: false },
+                            { id: 4, name: 'Brush teeth - morning', xp: 10, done: false },
+                            { id: 5, name: 'Brush teeth - afternoon', xp: 10, done: false },
+                            { id: 6, name: 'Brush teeth - night', xp: 10, done: false },
+                            { id: 7, name: 'Floss', xp: 15, done: false },
+                            { id: 8, name: 'Drink water', xp: 20, done: false },
+                            { id: 9, name: 'Log breakfast', xp: 20, done: false },
+                            { id: 10, name: 'Log lunch', xp: 20, done: false },
+                            { id: 11, name: 'Log dinner', xp: 20, done: false },
+                            { id: 12, name: 'Workout', xp: 50, done: false },
+                            { id: 13, name: 'Study SC-300', xp: 40, done: false },
+                            { id: 14, name: 'Take vitamins', xp: 15, done: false },
+                        ],
+                        todos: [], xpToday: 0, xpGoal: 700, totalXp: 0,
+                        streak: 0, bestStreak: 0, weekXp: [0, 0, 0, 0, 0, 0, 0],
+                        currentSplit: 'push', lastDate: new Date().toDateString(),
+                        visibleRings: ['water', 'budget', 'cals', 'xp', 'habits', 'sleep', 'steps', 'study', 'protein', 'vitamins'],
+                        sleep: 0, steps: 0, studyMins: 0, vitaminsTaken: false,
+                        xpBreakdown: { habits: 0, food: 0, water: 0, todos: 0 }, waterHabitDone: false,
+                        progressPhotos: [], customRings: [], transactions: [], budgetGoal: 3000, monthlyIncome: 0,
+                        history: {}, journal: {}, schedule: [], longTermGoals: [],
+                        workoutLogs: [], currentWorkoutDate: new Date().toDateString()
+                    };
+                    
+                    // 3. Clear localStorage and re-save
+                    localStorage.removeItem('lockin_v3');
+                    save();
+                    
+                    // 4. Force reload to ensure everything is fresh
+                    window.location.reload();
+                } else {
+                    alert("Reset failed: " + result.message);
+                }
+            } catch (e) {
+                console.error("Reset error:", e);
+                alert("An error occurred during reset.");
+            }
+        }
 
         function checkNewDay() {
             const today = new Date().toDateString();
@@ -2754,7 +3087,7 @@
                     S.history[S.lastDate] = snap;
 
                     if (S.lastDate === yest.toDateString()) { S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak); }
-                    else { S.streak = 0; }
+                    else { S.streak = 1; } // Restart at Day 1 instead of 0
                 }
 
                 S.lastDate = today; S.water = 0; S.waterHabitDone = false; S.foods = []; S.xpToday = 0;
@@ -2764,6 +3097,9 @@
                 S.weekXp = [...S.weekXp.slice(1), 0];
                 S.xpBreakdown = { habits: 0, food: 0, water: 0, todos: 0 };
                 S.schedule = [];
+                S.aiChatHistory = []; // Clear AI Chat History for the new day
+                S.workoutLogs = []; // Clear intra-workout progression
+                S.currentWorkoutDate = today;
                 save();
             }
         }
@@ -2839,6 +3175,38 @@
             save(); renderAll();
         }
         function deleteFood(id) { S.foods = S.foods.filter(f => f.id !== id); save(); renderAll(); }
+
+        function addAIFoodLog(data) {
+            if (!data.name || !data.cals) return;
+            S.foods.push({ 
+                id: Date.now(), 
+                name: data.name, 
+                cals: parseInt(data.cals) || 0, 
+                protein: parseInt(data.protein) || 0, 
+                carbs: parseInt(data.carbs) || 0, 
+                fat: parseInt(data.fat) || 0 
+            });
+            addXP(10, 'food'); // Bonus XP for using AI!
+            save(); renderAll();
+        }
+
+        function addAIWorkoutLog(data) {
+            if (!data.exercise || !data.reps) return;
+            if (!S.workoutLogs) S.workoutLogs = [];
+            S.workoutLogs.push({
+                id: Date.now(),
+                date: S.currentWorkoutDate,
+                split: S.currentSplit,
+                exercise: data.exercise,
+                reps: data.reps,
+                weight: data.weight || '',
+                rpe: data.rpe || '',
+                zone: data.zone || '',
+                notes: data.notes || ''
+            });
+            addXP(15, 'todos'); // XP for logging a set
+            save(); renderWorkout();
+        }
 
         function toggleHabit(id) {
             const h = S.habits.find(h => h.id === id); if (!h) return;
@@ -3024,15 +3392,48 @@
             save(); renderAll();
         }
 
-        function uploadProgressPhoto(event) {
+        async function uploadProgressPhoto(event) {
             const file = event.target.files[0]; if (!file) return;
             const week = parseInt(document.getElementById('photo-week-select').value) || 1;
+            
+            console.log("Processing and uploading photo...");
+            
             const reader = new FileReader();
-            reader.onload = function (e) {
+            reader.onload = async function (e) {
                 if (!S.progressPhotos) S.progressPhotos = [];
                 const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                S.progressPhotos.push({ id: Date.now(), src: e.target.result, date, week });
-                save(); renderPhotos();
+                
+                // 1. Compress the image locally first
+                const compressed = await compressImage(e.target.result);
+                
+                try {
+                    // 2. Upload the compressed image to the server
+                    const res = await fetch('/api/upload-photo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: compressed })
+                    });
+                    const result = await res.json();
+                    
+                    if (result.success) {
+                        // 3. Store only the URL return from the server
+                        S.progressPhotos.push({ 
+                            id: Date.now(), 
+                            src: result.url, // This is a tiny URL instead of a huge Base64 string!
+                            date, 
+                            week 
+                        });
+                        
+                        save(); 
+                        renderPhotos();
+                        console.log("Photo persisted to server disk.");
+                    } else {
+                        throw new Error(result.error || "Upload failed");
+                    }
+                } catch (err) {
+                    console.error("Photo persistent upload failed:", err);
+                    alert("Could not save photo to server. Check your connection.");
+                }
             };
             reader.readAsDataURL(file);
             event.target.value = '';
@@ -3111,7 +3512,296 @@
             }).join('')}
   </div>`;
         }
-        function showScreen(n, b) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active')); document.getElementById('screen-' + n).classList.add('active'); if (b) b.classList.add('active'); }
+        // AI COACH & MEAL SCANNER LOGIC
+        function triggerMealScan() {
+            document.getElementById('meal-camera-input').click();
+        }
+
+        async function analyzeMeal(event) {
+            const file = event.target.files[0]; if (!file) return;
+            
+            // Show global loading if needed, or just console context
+            console.log("Analyzing meal with Gemini...");
+            const originalText = document.querySelector('.ai-btn-scan').innerHTML;
+            document.querySelector('.ai-btn-scan').innerHTML = '<div class="ai-spinner" style="width:12px;height:12px;margin:0;"></div> Analyzing...';
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const res = await fetch('/api/analyze-meal', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            image: e.target.result,
+                            context: { workoutType: S.currentSplit }
+                        })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        const a = data.analysis;
+                        document.getElementById('food-name').value = a.name;
+                        document.getElementById('food-cals').value = a.cals;
+                        document.getElementById('food-protein').value = a.protein;
+                        document.getElementById('food-carbs').value = a.carbs;
+                        document.getElementById('food-fat').value = a.fat;
+                        
+                        // Show the tip in a nice way
+                        alert("🍕 AI Breakdown: " + a.tip);
+                    }
+                } catch (err) {
+                    console.error("AI Analysis failed:", err);
+                    alert("Gemini couldn't see that meal clearly. Try again?");
+                } finally {
+                    document.querySelector('.ai-btn-scan').innerHTML = originalText;
+                    event.target.value = '';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // AI COACH CONVERSATIONAL LOGIC
+        function renderChat() {
+            const container = document.getElementById('chat-container');
+            if (!container) return;
+            const history = S.aiChatHistory || [];
+            
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align:center; padding:40px 20px;">
+                        <div style="font-size:40px; margin-bottom:12px;">💪</div>
+                        <div style="font-size:18px; font-weight:700; color:var(--text); margin-bottom:8px;">Ready to lock in?</div>
+                        <div style="font-size:13px; color:var(--muted);">I'm your Gemini Coach. Ask me about your progress, weight goals, or what to eat after your ${S.currentSplit} workout.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = history.map(m => {
+                let imgHtml = '';
+                if (m.images && m.images.length > 0) {
+                    imgHtml = `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">` +
+                        m.images.map(img => `<img src="${img}" style="max-height:100px; border-radius:8px; border: 1px solid rgba(255,255,255,0.1);" />`).join('')
+                        + `</div>`;
+                } else if (m.image) {
+                    imgHtml = `<br><img src="${m.image}" style="max-width:100%; max-height:150px; border-radius:8px; margin-top:8px; border: 1px solid rgba(255,255,255,0.1);" />`;
+                }
+                
+                return `
+                <div class="chat-bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-coach'}">
+                    ${m.text}
+                    ${imgHtml}
+                </div>
+                `;
+            }).join('');
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function autoExpand(el) {
+            el.style.height = 'inherit';
+            el.style.height = (el.scrollHeight) + 'px';
+        }
+
+        function clearChat() {
+            S.aiChatHistory = [];
+            save();
+            renderChat();
+        }
+
+        let currentChatImages = [];
+
+        function clearChatImage() {
+            currentChatImages = [];
+            document.getElementById('chat-file-input').value = "";
+            document.getElementById('chat-image-preview-container').style.display = 'none';
+            document.getElementById('chat-image-preview-container').innerHTML = '';
+        }
+
+        function handleChatImageUpload(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            Array.from(files).forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const max_dim = 800; // Compress dynamically
+
+                        if (width > height && width > max_dim) {
+                            height *= max_dim / width;
+                            width = max_dim;
+                        } else if (height > max_dim) {
+                            width *= max_dim / height;
+                            height = max_dim;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const b64 = canvas.toDataURL('image/jpeg', 0.8);
+                        currentChatImages.push(b64);
+                        
+                        refreshPreviewUI();
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function refreshPreviewUI() {
+            const container = document.getElementById('chat-image-preview-container');
+            container.innerHTML = '';
+            if (currentChatImages.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'flex';
+            currentChatImages.forEach((src, i) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'position:relative; display:inline-block; flex-shrink:0;';
+                
+                if (src.startsWith('data:audio/')) {
+                    const audioIcon = document.createElement('div');
+                    audioIcon.innerHTML = '<span style="font-size:24px; margin-bottom:4px;">🎤</span><br>Voice Memo';
+                    audioIcon.style.cssText = 'height: 80px; width: 80px; padding: 10px; background: var(--purple2); color: white; border-radius: 8px; font-size: 10px; font-weight: bold; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;';
+                    wrapper.appendChild(audioIcon);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = src;
+                    img.style.cssText = 'max-height: 80px; max-width:120px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: block; object-fit:cover;';
+                    wrapper.appendChild(img);
+                }
+                
+                const btn = document.createElement('button');
+                btn.innerHTML = '✕';
+                btn.style.cssText = 'position:absolute; top: -5px; right: -5px; background: #ff4444; color: #fff; border:none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; display:flex; align-items:center; justify-content:center; font-size:10px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);';
+                btn.onclick = () => {
+                    currentChatImages.splice(i, 1);
+                    refreshPreviewUI();
+                };
+                
+                wrapper.appendChild(btn);
+                container.appendChild(wrapper);
+            });
+        }
+
+        function handleChatKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        }
+
+        function handleAudioUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                currentChatImages.push(event.target.result);
+                refreshPreviewUI();
+                const input = document.getElementById('chat-input');
+                if(!input.value.trim()) input.value = "Analyze this voice memo";
+            };
+            reader.readAsDataURL(file);
+            document.getElementById('chat-audio-input').value = ""; // Reset
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text && currentChatImages.length === 0) return;
+
+            // Reset height after send
+            input.style.height = 'inherit';
+
+            // Add user message to state
+            const payloadImages = [...currentChatImages];
+            S.aiChatHistory.push({ role: 'user', text: text || "[Sent images]", images: payloadImages });
+            input.value = '';
+            clearChatImage();
+            renderChat();
+            save();
+
+            // Add a temporary "Typing..." bubble
+            const container = document.getElementById('chat-container');
+            const typingId = 'typing-' + Date.now();
+            const typingBubble = document.createElement('div');
+            typingBubble.id = typingId;
+            typingBubble.className = 'chat-bubble bubble-coach';
+            typingBubble.innerHTML = '<div class="ai-spinner" style="width:12px;height:12px;display:inline-block;margin:0;"></div> Coach is thinking...';
+            container.appendChild(typingBubble);
+            container.scrollTop = container.scrollHeight;
+
+            try {
+                const res = await fetch('/api/ai-coach', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        state: S,
+                        workout: splits[S.currentSplit],
+                        history: S.aiChatHistory.slice(0, -1), // Everything except the latest message
+                        prompt: text || "Please analyze these images.", // The actual new message to process
+                        images: payloadImages
+                    })
+                });
+                const data = await res.json();
+
+                // Remove typing bubble
+                const tb = document.getElementById(typingId);
+                if (tb) tb.remove();
+
+                if (data.success && data.advice) {
+                    const advice = data.advice;
+                    S.aiChatHistory.push({ role: 'model', text: advice.message || "Coach processed your request." });
+                    
+                    if (advice.command) {
+                        const cmd = advice.command;
+                        if (cmd.target === 'cals') { S.calGoal = cmd.value; S.aiChatHistory.push({ role: 'model', text: `🛡️ <i>Goal updated: ${cmd.target} is now ${cmd.value}.</i>` }); }
+                        else if (cmd.target === 'protein') { S.proteinGoal = cmd.value; S.aiChatHistory.push({ role: 'model', text: `🛡️ <i>Goal updated: ${cmd.target} is now ${cmd.value}.</i>` }); }
+                        else if (cmd.target === 'water') { S.waterGoal = cmd.value; S.aiChatHistory.push({ role: 'model', text: `🛡️ <i>Goal updated: ${cmd.target} is now ${cmd.value}.</i>` }); }
+                        else if (cmd.target === 'log_food') {
+                            addAIFoodLog(cmd.data);
+                            S.aiChatHistory.push({ role: 'model', text: `🍔 <i>Logged Food: ${cmd.data.name} (${cmd.data.cals} kcal).</i>` });
+                        }
+                        else if (cmd.target === 'log_workout') {
+                            addAIWorkoutLog(cmd.data);
+                            S.aiChatHistory.push({ role: 'model', text: `🏋️‍♂️ <i>Logged Set: ${cmd.data.exercise} (${cmd.data.reps} reps).</i>` });
+                        }
+                        save();
+                        renderAll();
+                    }
+                } else {
+                    S.aiChatHistory.push({ role: 'model', text: "⚠️ Coach is momentarily out of breath. Try again in a second!" });
+                }
+                renderChat();
+                save();
+            } catch (err) {
+                console.error("AI Coach failed:", err);
+                const tb = document.getElementById(typingId);
+                if (tb) tb.remove();
+                S.aiChatHistory.push({ role: 'model', text: "⚠️ Connection lost. Ensure your server is running and try again." });
+                renderChat();
+                save();
+            }
+        }
+
+        function showScreen(n, b) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+            document.getElementById('screen-' + n).classList.add('active');
+            if (b) b.classList.add('active');
+            
+            if (n === 'ai-coach') renderChat();
+        }
         function setSplit(k) { S.currentSplit = k; save(); renderWorkout(); document.querySelectorAll('.split-btn').forEach(b => b.classList.toggle('active', b.dataset.split === k)); }
 
         function ring(r, sz = 60) {
@@ -3446,7 +4136,48 @@
             aF.forEach(id => { const el = document.getElementById(id); if (!el) return; const g = d.front[id]; el.setAttribute('fill', g || '#1e2d3a'); });
             aB.forEach(id => { const el = document.getElementById(id); if (!el) return; const g = d.back[id]; el.setAttribute('fill', g || '#1e2d3a'); });
             document.getElementById('split-btns').innerHTML = Object.keys(splits).map(k => `<button class="split-btn ${k === S.currentSplit ? 'active' : ''}" data-split="${k}" onclick="setSplit('${k}')">${k.charAt(0).toUpperCase() + k.slice(1)}</button>`).join('');
-            document.getElementById('exercise-list').innerHTML = d.ex.map(e => `<div class="ex-item"><div><div style="font-size:13px;font-weight:500;">${e.n}</div><div style="font-size:11px;color:var(--muted);">${e.m}</div></div><span class="ex-sets">${e.s}</span></div>`).join('');
+            
+            // Dynamic Set/Rep UI Rendering
+            document.getElementById('exercise-list').innerHTML = d.ex.map((e, index) => {
+                let sNum = 3; // Default 3 sets
+                if(e.s.includes('×')) sNum = parseInt(e.s.split('×')[0]) || 3;
+                else if(e.s.includes('x')) sNum = parseInt(e.s.split('x')[0]) || 3;
+                
+                const exLogs = (S.workoutLogs || []).filter(l => l.exercise.toLowerCase() === e.n.toLowerCase() && l.date === S.currentWorkoutDate);
+
+                let nodesHTML = '';
+                for(let i=0; i<sNum; i++) {
+                    const log = exLogs[i]; // get the log for set i
+                    if (log) {
+                        nodesHTML += `<div class="set-node completed" title="RPE: ${log.rpe || '-'}, Zone: ${log.zone || '-'} | ${log.notes || ''}" style="background:#7c6fff; border-color:#7c6fff; color:#fff;" onclick="alert('Set ${i+1}: ${log.reps} reps @ ${log.weight || 'BW'}\\nRPE: ${log.rpe || '-'}\\nZone: ${log.zone || '-'}\\nNotes: ${log.notes || 'None'}')">✓</div>`;
+                    } else {
+                        nodesHTML += `<div class="set-node" onclick="alert('Tap the Microphone (🎤) in the AI Coach tab to hands-free log this set!')"></div>`;
+                    }
+                }
+
+                let logsHTML = exLogs.map((log, i) => `
+                    <div style="font-size:11px; color:var(--muted); margin-top:4px; padding-left:12px; border-left: 2px solid #7c6fff; margin-bottom:4px;">
+                        Set ${i+1}: ${log.reps} reps${log.weight ? ' @ '+log.weight : ''} 
+                        <span style="background:var(--bg3); padding:2px 6px; border-radius:4px; font-size:9px; margin-left:6px; color:#fff; border:1px solid #333;">RPE ${log.rpe || '-'}</span>
+                        <span style="background:var(--bg3); padding:2px 6px; border-radius:4px; font-size:9px; margin-left:4px; color:#fff; border:1px solid #333;">Zone ${log.zone || '-'}</span>
+                        ${log.notes ? `<br><span style="color:#a090ff; display:inline-block; margin-top:4px;">↳ Coach Note: ${log.notes}</span>` : ''}
+                    </div>
+                `).join('');
+
+                return `
+                <div class="ex-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <div>
+                            <div style="font-size:14px;font-weight:600;">${e.n}</div>
+                            <div style="font-size:11px;color:var(--muted);">${e.m} · Target: ${e.s}</div>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            ${nodesHTML}
+                        </div>
+                    </div>
+                    ${logsHTML}
+                </div>`;
+            }).join('');
             document.getElementById('workout-nutrition').innerHTML = d.nut.map(n => `<div class="tip-row"><div class="tip-icon" style="background:${n.bg};">${n.i}</div><div><div style="font-size:13px;font-weight:500;">${n.t}</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">${n.d}</div></div></div>`).join('');
         }
 

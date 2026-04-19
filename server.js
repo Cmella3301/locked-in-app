@@ -3,20 +3,33 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config();
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
+
+// AI Initialization
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '80mb' }));
 app.use(express.static(__dirname));
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, 'data');
+const photosDir = path.join(dataDir, 'photos');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
+if (!fs.existsSync(photosDir)) {
+  fs.mkdirSync(photosDir, { recursive: true });
+}
+
+// Serve photos statically
+app.use('/photos', express.static(photosDir));
 
 // Initialize SQLite database - store in /app/data/ for volume persistence
 const dbPath = path.join(dataDir, 'lockin.db');
@@ -96,12 +109,45 @@ db.serialize(() => {
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 });
 
 // Routes
 
-// Get all data
-app.get('/api/data', (req, res) => {
+// Get Full Application State
+app.get('/api/state', (req, res) => {
+  db.get('SELECT data, updatedAt FROM state WHERE id = 1', (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.json(null);
+    const data = JSON.parse(row.data);
+    data.serverUpdatedAt = row.updatedAt;
+    res.json(data);
+  });
+});
+
+// Save Full Application State
+app.post('/api/state', (req, res) => {
+  const data = JSON.stringify(req.body);
+  db.run(
+    `INSERT INTO state (id, data, updatedAt) 
+     VALUES (1, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updatedAt = CURRENT_TIMESTAMP`,
+    [data],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
+// Backward compatibility / Ring shortcuts
+app.post('/api/ring/:id/:action', (req, res) => {
   const data = {};
   let completed = 0;
 
@@ -296,6 +342,164 @@ app.delete('/api/schedule/:id', (req, res) => {
   });
 });
 
+// Upload progress photo
+app.post('/api/upload-photo', (req, res) => {
+  const { image } = req.body;
+  if (!image) return res.status(400).json({ error: 'No image provided' });
+
+  try {
+    // Expecting data:image/jpeg;base64,xxxx
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+    const filename = `photo_${Date.now()}.jpg`;
+    const filePath = path.join(photosDir, filename);
+
+    fs.writeFileSync(filePath, base64Data, 'base64');
+    
+    // Return the URL that can be used to view the photo
+    res.json({ success: true, url: `/photos/${filename}` });
+  } catch (err) {
+    console.error('Photo save error:', err);
+    res.status(500).json({ error: 'Failed to save photo' });
+  }
+});
+
+// --- AI COACH & MEAL SCANNER ---
+
+app.post('/api/analyze-meal', async (req, res) => {
+  const { image, context } = req.body;
+  if (!image) return res.status(400).json({ error: 'No image provided' });
+
+  try {
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+    
+    const prompt = `You are a professional sports nutritionist. Analyze this food photo.
+    Context: The user just finished a ${context.workoutType || 'general'} workout. 
+    Provide the meal name and estimate its nutritional value.
+    Give a 1-sentence "Coach's Tip" on how this specific meal helps their current recovery or goals.
+    
+    Return JSON format ONLY:
+    {
+      "name": "Meal Name",
+      "cals": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "tip": "Coach's tip here"
+    }`;
+
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
+    ]);
+
+    const response = await result.response;
+    let text = response.text();
+    
+    // Clean JSON from possible markdown formatting
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const analysis = JSON.parse(text);
+
+    res.json({ success: true, analysis });
+  } catch (err) {
+    console.error('AI Analysis error:', err);
+    res.status(500).json({ error: 'AI failed to analyze meal' });
+  }
+});
+
+app.post('/api/ai-coach', async (req, res) => {
+  const { state, workout, history, prompt } = req.body;
+
+  try {
+    const systemPrompt = `You are an elite fitness coach in the "LOCK-IN" program.
+    You have full "Direct Control" over the user's goals, foods, and workout logs. 
+
+    Current Daily Metrics: ${JSON.stringify({cals: state.cals, protein: state.protein, water: state.water})}
+    Today's Workout Plan: ${JSON.stringify(workout)}
+    
+    INSTRUCTIONS:
+    - If the user asks to change a goal, emit a target command ('cals', 'protein', 'water') with a flat "value".
+    - If the user logs a food or you analyze an image of food, emit the 'log_food' command. Estimate macros if needed.
+    - If the user logs a completed workout set (e.g., "I did 8 reps of bench"), emit the 'log_workout' command! You must match "exercise" exactly from their Workout Plan. Extract "reps", "weight" (if stated), "rpe" (1-10 string), "zone" (e.g., Strength, Hypertrophy), and any coach "notes" regarding their form.
+    - Be supportive, knowledgeable, and high-performance.
+    - Keep responses concise.
+    
+    Return JSON format ONLY:
+    {
+      "message": "Your conversational response",
+      "command": { "target": "log_workout", "data": { "exercise": "Bench press", "reps": "8", "weight": "225", "rpe": "8", "zone": "Strength", "notes": "Felt heavy." } } // (OPTIONAL)
+    }
+    Other valid targets: "log_food" (requires data: name, cals, protein, carbs, fat), or "cals", "protein", "water" (requires value: 2000).`;
+
+    // Convert frontend history to Gemini format
+    const geminiHistory = (history || []).map(m => ({
+      role: m.role === 'model' ? 'model' : 'user',
+      parts: [{ text: m.text }]
+    }));
+
+    const chat = model.startChat({
+      history: geminiHistory,
+      generationConfig: { maxOutputTokens: 800 },
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+      ]
+    });
+
+    const userMessage = prompt || "Hello Coach, give me a status update.";
+    
+    // Inject dynamic system context into every prompt invisibly.
+    let finalPrompt = `[SYSTEM CONTEXT]\n${systemPrompt}\n\n[USER MESSAGE]\n${userMessage}`;
+
+    let msgParts = [{ text: finalPrompt }];
+    const { image, images } = req.body;
+    
+    // Support legacy single image or new multi-image
+    const imageList = images || (image ? [image] : []);
+    
+    imageList.forEach(media => {
+        if (media && media.startsWith('data:')) {
+            const mimeType = media.split(';')[0].split(':')[1];
+            const base64Data = media.split(',')[1];
+            msgParts.push({
+                inlineData: { data: base64Data, mimeType: mimeType }
+            });
+        }
+    });
+
+
+    const result = await chat.sendMessage(msgParts);
+    const response = await result.response;
+    let text = response.text();
+    
+    console.log(`[AI COACH] Raw Response: ${text}`);
+
+    // Robust JSON extraction
+    let advice = { message: text };
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        advice = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.warn(`[AI COACH] JSON Parse failed, using raw text.`);
+      advice = { message: text };
+    }
+
+    // Ensure there's always a message
+    if (!advice.message && advice.recommendation) {
+       advice.message = advice.recommendation + ": " + advice.reason;
+    }
+
+    res.json({ success: true, advice });
+
+  } catch (err) {
+    console.error('AI Coach error:', err);
+    res.status(500).json({ success: false, error: 'Coach is offline' });
+  }
+});
+
 // Update stats
 app.post('/api/stats', (req, res) => {
   const { overallRank, overallNum, xpToday } = req.body;
@@ -319,6 +523,25 @@ app.post('/api/stats', (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Full Reset - WIPE ALL DATA
+app.post('/api/reset', (req, res) => {
+  db.serialize(() => {
+    db.run('DELETE FROM history');
+    db.run('DELETE FROM ring_values');
+    db.run('DELETE FROM journal');
+    db.run('DELETE FROM schedule');
+    db.run('DELETE FROM stats');
+    db.run('DELETE FROM state');
+    db.run('DELETE FROM rings');
+    res.json({ success: true, message: 'All data wiped successfully' });
+  });
+});
+
+// Watch Dashboard
+app.get('/watch', (req, res) => {
+  res.sendFile(path.join(__dirname, 'watch.html'));
 });
 
 // Serve index.html for any unknown routes (SPA fallback)
