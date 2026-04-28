@@ -12,6 +12,13 @@ This project has been upgraded to a **Global Sync Architecture**. It uses a unif
 - **Wrist Hub:** Minimalist Apple Watch dashboard at `/watch`.
 - **Health-Monitored:** Docker containerized with automated healthchecks.
 
+## 🤖 AI Assistant Installation (For ChatGPT/Claude/Cursor)
+
+If you have an AI coding assistant and want it to automatically set this project up for you, simply copy and paste the prompt below into your AI of choice:
+
+> **Copy & Paste this to your AI:**
+> *"I want to run a locally-hosted web application called 'LOCK-IN Habit Tracker' on my machine. Please give me the exact terminal commands to clone the repository (from Cmella3301/locked-in-app), navigate into the folder, and spin it up using Docker Compose. If I don't have Docker installed, briefly tell me how to get it for my OS first. Once the container is running, tell me what localhost port to open, and explain how I can save it as a PWA on my phone or computer."*
+
 ## 🚀 Deployment (Docker)
 
 ```bash

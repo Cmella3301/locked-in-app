@@ -27,8 +27,28 @@ services:
     volumes:
       - ./data-gf:/app/data
       - ./.env:/app/.env
+      - ./icons-gf:/app/icons
     environment:
       - NODE_ENV=production
       - PORT=3001
       - GEMINI_API_KEY=AIzaSyA-Vt0fA85tFGkowJ_kdr7f21RGtqxmMcM
+    restart: unless-stopped
+
+  dozzle:
+    container_name: dozzle
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+
+  zabbix:
+    image: zabbix/zabbix-appliance:latest
+    container_name: zabbix-appliance
+    ports:
+      - "8082:80"
+      - "10051:10051"
+    environment:
+      - PHP_TZ="America/New_York"
     restart: unless-stopped

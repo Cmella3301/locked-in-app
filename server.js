@@ -16,6 +16,13 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '80mb' }));
+app.use((req, res, next) => {
+    // Injecting telemetry hook for Dozzle observation matrix
+    if (req.url !== '/api/health') {
+        console.log(`[NET-LOG] ${new Date().toLocaleTimeString()} | HTTP ${req.method} | ${req.url} | SOURCE: ${req.ip}`);
+    }
+    next();
+});
 app.use(express.static(__dirname));
 
 // Ensure data directory exists
