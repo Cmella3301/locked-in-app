@@ -9,6 +9,7 @@ RUN npm install --omit=dev
 # Copy application files
 COPY server.js .
 COPY index.html .
+COPY watch.html .
 COPY style.css .
 COPY app.js .
 COPY manifest.json .
