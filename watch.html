@@ -131,73 +131,109 @@
     <div id="toast" class="toast">LOCKED IN</div>
 
     <script>
-        let currentData = null;
+        let S = null;
 
         async function refreshData() {
             try {
-                const res = await fetch('/api/data');
-                currentData = await res.json();
-                render();
+                const res = await fetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                const data = await res.json();
+                if (data) {
+                    S = data;
+                    render();
+                }
             } catch (e) {
                 console.error("Wait for server...");
             }
         }
 
         function render() {
-            if (!currentData) return;
+            if (!S) return;
 
-            // Water
-            const water = currentData.currentValues.water || { value: 0, goal: 8 };
-            document.getElementById('waterVal').innerText = `${water.value} / ${water.goal}`;
+            // Water (glasses of 250ml)
+            const waterGlasses = Math.floor((S.water || 0) / 250);
+            const goalGlasses = Math.floor((S.waterGoal || 2500) / 250);
+            document.getElementById('waterVal').innerText = `${waterGlasses} / ${goalGlasses}`;
             
-            // Brush
-            const brush = currentData.currentValues.brush || { met: 0 };
-            document.getElementById('brushState').innerText = brush.met ? 'COMPLETED' : 'INCOMPLETE';
-            document.getElementById('brushBtn').classList.toggle('met', brush.met);
+            // Brush (check if any brush habit is done today)
+            const brushHabits = (S.habits || []).filter(h => h.name.includes('Brush'));
+            const allBrushDone = brushHabits.length > 0 && brushHabits.every(h => h.done);
+            const anyBrushDone = brushHabits.some(h => h.done);
+            document.getElementById('brushState').innerText = allBrushDone ? 'COMPLETED' : (anyBrushDone ? 'PARTIAL' : 'INCOMPLETE');
+            document.getElementById('brushBtn').classList.toggle('met', allBrushDone);
 
             // Floss
-            const floss = currentData.currentValues.floss || { met: 0 };
-            document.getElementById('flossState').innerText = floss.met ? 'COMPLETED' : 'INCOMPLETE';
-            document.getElementById('flossBtn').classList.toggle('met', floss.met);
+            const floss = (S.habits || []).find(h => h.name.includes('Floss')) || { done: false };
+            document.getElementById('flossState').innerText = floss.done ? 'COMPLETED' : 'INCOMPLETE';
+            document.getElementById('flossBtn').classList.toggle('met', floss.done);
 
             // Workout
-            const workout = currentData.currentValues.workout || { met: 0 };
-            document.getElementById('workoutState').innerText = workout.met ? 'COMPLETED' : 'INCOMPLETE';
-            document.getElementById('workoutBtn').classList.toggle('met', workout.met);
+            const workout = (S.habits || []).find(h => h.name.includes('Workout')) || { done: false };
+            document.getElementById('workoutState').innerText = workout.done ? 'COMPLETED' : 'INCOMPLETE';
+            document.getElementById('workoutBtn').classList.toggle('met', workout.done);
         }
 
-        async function updateRing(ringId, increment) {
-            const current = currentData.currentValues[ringId] || { value: 0, goal: 8 };
-            const newValue = (current.value || 0) + increment;
+        async function syncState() {
+            try {
+                await fetch('/api/state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(S)
+                });
+                showToast();
+                render();
+            } catch(e) {
+                console.error("Failed to sync:", e);
+            }
+        }
+
+        async function updateRing(type, increment) {
+            if (!S) return;
+            if (type === 'water') {
+                S.water = Math.min((S.water || 0) + 250, (S.waterGoal || 2500) * 1.5);
+                if (S.water >= S.waterGoal && !S.waterHabitDone) {
+                    S.xpToday += 20; S.totalXp += 20; S.waterHabitDone = true;
+                }
+            }
+            await syncState();
+        }
+
+        async function toggleRing(type) {
+            if (!S) return;
             
-            await fetch(`/api/ring/${ringId}/value`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    value: newValue,
-                    goal: current.goal,
-                    met: newValue >= current.goal
-                })
-            });
-            showToast();
-            refreshData();
-        }
+            let habitName = '';
+            if (type === 'floss') habitName = 'Floss';
+            if (type === 'workout') habitName = 'Workout';
+            
+            if (type === 'brush') {
+                const brushHabits = (S.habits || []).filter(h => h.name.includes('Brush'));
+                const nextIncomplete = brushHabits.find(h => !h.done);
+                if (nextIncomplete) {
+                    nextIncomplete.done = true;
+                    S.xpToday += nextIncomplete.xp || 10;
+                    S.totalXp += nextIncomplete.xp || 10;
+                } else {
+                    brushHabits.forEach(h => {
+                        h.done = false;
+                        S.xpToday = Math.max(0, S.xpToday - (h.xp || 10));
+                        S.totalXp = Math.max(0, S.totalXp - (h.xp || 10));
+                    });
+                }
+                await syncState();
+                return;
+            }
 
-        async function toggleRing(ringId) {
-            const current = currentData.currentValues[ringId] || { met: 0, goal: 1 };
-            const nowMet = !current.met;
-
-            await fetch(`/api/ring/${ringId}/value`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    value: nowMet ? 1 : 0,
-                    goal: 1,
-                    met: nowMet
-                })
-            });
-            showToast();
-            refreshData();
+            const h = (S.habits || []).find(h => h.name.includes(habitName));
+            if (h) {
+                h.done = !h.done;
+                if (h.done) {
+                    S.xpToday += h.xp || 20;
+                    S.totalXp += h.xp || 20;
+                } else {
+                    S.xpToday = Math.max(0, S.xpToday - (h.xp || 20));
+                    S.totalXp = Math.max(0, S.totalXp - (h.xp || 20));
+                }
+            }
+            await syncState();
         }
 
         function showToast() {
@@ -206,9 +242,8 @@
             setTimeout(() => t.style.opacity = '0', 1000);
         }
 
-        // Initial load
         refreshData();
-        setInterval(refreshData, 10000); // Polling for watch sync
+        setInterval(refreshData, 5000);
     </script>
 </body>
 </html>
