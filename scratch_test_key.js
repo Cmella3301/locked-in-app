@@ -6,7 +6,9 @@ async function test() {
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   
   try {
-    console.log("Testing Key:", process.env.GEMINI_API_KEY);
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not set");
+    }
     const result = await model.generateContent("Say hello");
     const response = await result.response;
     console.log("Success:", response.text());

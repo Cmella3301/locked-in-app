@@ -1,21 +1,47 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
 
 // AI Initialization
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+let model = null;
+if (process.env.GEMINI_API_KEY) {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+} else {
+  console.warn('[AI] GEMINI_API_KEY is not configured. AI features will stay offline.');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const publicDir = path.join(__dirname, 'public');
+const authEnabled = Boolean(process.env.APP_PASSWORD);
+const sessionTtlSeconds = 60 * 60 * 24 * 30;
+const sessionTtlMs = sessionTtlSeconds * 1000;
+const sessions = new Map();
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
 
 // Middleware
-app.use(cors());
-app.use(express.json({ limit: '80mb' }));
+if (allowedOrigins.length > 0) {
+  app.use(cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin not allowed by CORS policy'));
+    },
+    credentials: true
+  }));
+}
+app.use(express.json({ limit: '15mb' }));
 app.use((req, res, next) => {
     // Injecting telemetry hook for Dozzle observation matrix
     if (req.url !== '/api/health') {
@@ -23,7 +49,83 @@ app.use((req, res, next) => {
     }
     next();
 });
-app.use(express.static(__dirname));
+app.use(express.static(publicDir));
+
+function parseCookies(cookieHeader = '') {
+  return cookieHeader
+    .split(';')
+    .map(cookie => cookie.trim())
+    .filter(Boolean)
+    .reduce((acc, cookie) => {
+      const separatorIndex = cookie.indexOf('=');
+      if (separatorIndex === -1) return acc;
+      const key = cookie.slice(0, separatorIndex);
+      const value = decodeURIComponent(cookie.slice(separatorIndex + 1));
+      acc[key] = value;
+      return acc;
+    }, {});
+}
+
+function getSessionToken(req) {
+  const cookies = parseCookies(req.headers.cookie || '');
+  return cookies.lockin_session;
+}
+
+function clearExpiredSessions() {
+  const now = Date.now();
+  for (const [token, session] of sessions.entries()) {
+    if (session.expiresAt <= now) {
+      sessions.delete(token);
+    }
+  }
+}
+
+function setSessionCookie(res, token) {
+  const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader(
+    'Set-Cookie',
+    `lockin_session=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${sessionTtlSeconds}${secureFlag}`
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader(
+    'Set-Cookie',
+    'lockin_session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0'
+  );
+}
+
+function passwordMatches(candidate = '') {
+  const expected = Buffer.from(process.env.APP_PASSWORD || '', 'utf8');
+  const provided = Buffer.from(candidate, 'utf8');
+  if (expected.length === 0 || expected.length !== provided.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expected, provided);
+}
+
+function isAuthenticated(req) {
+  if (!authEnabled) return true;
+
+  clearExpiredSessions();
+  const token = getSessionToken(req);
+  if (!token) return false;
+
+  const session = sessions.get(token);
+  if (!session) return false;
+
+  session.expiresAt = Date.now() + sessionTtlMs;
+  return true;
+}
+
+function requireAuth(req, res, next) {
+  if (isAuthenticated(req)) {
+    next();
+    return;
+  }
+
+  res.status(401).json({ error: 'Authentication required', authRequired: true });
+}
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, 'data');
@@ -36,7 +138,7 @@ if (!fs.existsSync(photosDir)) {
 }
 
 // Serve photos statically
-app.use('/photos', express.static(photosDir));
+app.use('/photos', requireAuth, express.static(photosDir));
 
 // Initialize SQLite database - store in /app/data/ for volume persistence
 const dbPath = path.join(dataDir, 'lockin.db');
@@ -127,6 +229,52 @@ db.serialize(() => {
 
 // Routes
 
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/auth/status', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    authRequired: authEnabled,
+    authenticated: isAuthenticated(req)
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  if (!authEnabled) {
+    res.json({ success: true, authRequired: false });
+    return;
+  }
+
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || password.length === 0) {
+    res.status(400).json({ success: false, error: 'Password is required' });
+    return;
+  }
+
+  if (!passwordMatches(password)) {
+    res.status(401).json({ success: false, error: 'Invalid password' });
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { expiresAt: Date.now() + sessionTtlMs });
+  setSessionCookie(res, token);
+  res.json({ success: true, authRequired: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const token = getSessionToken(req);
+  if (token) {
+    sessions.delete(token);
+  }
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
+
+app.use('/api', requireAuth);
+
 // Get Full Application State
 app.get('/api/state', (req, res) => {
   db.get('SELECT data, updatedAt FROM state WHERE id = 1', (err, row) => {
@@ -140,7 +288,9 @@ app.get('/api/state', (req, res) => {
 
 // Save Full Application State
 app.post('/api/state', (req, res) => {
-  const data = JSON.stringify(req.body);
+  const payload = { ...req.body };
+  delete payload.serverUpdatedAt;
+  const data = JSON.stringify(payload);
   db.run(
     `INSERT INTO state (id, data, updatedAt) 
      VALUES (1, ?, CURRENT_TIMESTAMP)
@@ -148,7 +298,10 @@ app.post('/api/state', (req, res) => {
     [data],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
+      db.get('SELECT updatedAt FROM state WHERE id = 1', (selectErr, row) => {
+        if (selectErr) return res.status(500).json({ error: selectErr.message });
+        res.json({ success: true, serverUpdatedAt: row ? row.updatedAt : null });
+      });
     }
   );
 });
@@ -373,6 +526,11 @@ app.post('/api/upload-photo', (req, res) => {
 // --- AI COACH & MEAL SCANNER ---
 
 app.post('/api/analyze-meal', async (req, res) => {
+  if (!model) {
+    res.status(503).json({ error: 'AI features are not configured' });
+    return;
+  }
+
   const { image, context } = req.body;
   if (!image) return res.status(400).json({ error: 'No image provided' });
 
@@ -414,6 +572,11 @@ app.post('/api/analyze-meal', async (req, res) => {
 });
 
 app.post('/api/ai-coach', async (req, res) => {
+  if (!model) {
+    res.status(503).json({ success: false, error: 'AI features are not configured' });
+    return;
+  }
+
   const { state, workout, history, prompt } = req.body;
 
   try {
@@ -527,11 +690,6 @@ app.post('/api/stats', (req, res) => {
   );
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 // Full Reset - WIPE ALL DATA
 app.post('/api/reset', (req, res) => {
   db.serialize(() => {
@@ -548,16 +706,25 @@ app.post('/api/reset', (req, res) => {
 
 // Watch Dashboard
 app.get('/watch', (req, res) => {
-  res.sendFile(path.join(__dirname, 'watch.html'));
+  res.sendFile(path.join(publicDir, 'watch.html'));
 });
 
 // Serve index.html for any unknown routes (SPA fallback)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  if (path.extname(req.path)) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`LOCK-IN server running on http://localhost:${PORT}`);
+  if (authEnabled) {
+    console.log('[SECURITY] App password protection is enabled.');
+  } else {
+    console.warn('[SECURITY] APP_PASSWORD is not set. API protection is disabled.');
+  }
 });
 
 // Graceful shutdown

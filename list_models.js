@@ -1,9 +1,12 @@
-// Removed SDK require.
+require("dotenv").config();
 
 async function listModels() {
   try {
-    // This is a direct REST call because listModels might be annoying in v0.21.0
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyA-Vt0fA85tFGkowJ_kdr7f21RGtqxmMcM`);
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not set");
+    }
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
     const data = await res.json();
     console.log("AVAILABLE MODELS:");
     if (data.models) {

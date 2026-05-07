@@ -4,17 +4,11 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copy application files
 COPY server.js .
-COPY index.html .
-COPY watch.html .
-COPY style.css .
-COPY app.js .
-COPY manifest.json .
-COPY sw.js .
-COPY icons/ ./icons/
+COPY public ./public
 
 # Create data directory for SQLite persistence
 RUN mkdir -p /app/data

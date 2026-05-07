@@ -133,12 +133,88 @@
     <script>
         let S = null;
 
+        function nowIso() {
+            return new Date().toISOString();
+        }
+
+        function ensureSyncMeta(state) {
+            if (!state.syncMeta || typeof state.syncMeta !== 'object') state.syncMeta = {};
+            if (!('localUpdatedAt' in state.syncMeta)) state.syncMeta.localUpdatedAt = null;
+            if (!('serverUpdatedAt' in state.syncMeta)) state.syncMeta.serverUpdatedAt = null;
+            if (!('lastSyncedAt' in state.syncMeta)) state.syncMeta.lastSyncedAt = null;
+            return state;
+        }
+
+        let authPromptInFlight = null;
+
+        async function ensureAuthenticated(message = "Enter your LOCK-IN password to continue.") {
+            if (authPromptInFlight) return authPromptInFlight;
+
+            authPromptInFlight = (async () => {
+                const statusRes = await fetch('/api/auth/status', {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                if (!statusRes.ok) throw new Error(`Auth status failed with ${statusRes.status}`);
+
+                const status = await statusRes.json();
+                if (!status.authRequired || status.authenticated) {
+                    return true;
+                }
+
+                let promptMessage = message;
+                while (true) {
+                    const password = window.prompt(promptMessage);
+                    if (password === null) throw new Error('Authentication cancelled by user');
+
+                    const loginRes = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+
+                    if (loginRes.ok) return true;
+
+                    const loginData = await loginRes.json().catch(() => ({}));
+                    promptMessage = loginData.error || 'Incorrect password. Please try again.';
+                    window.alert(promptMessage);
+                }
+            })();
+
+            try {
+                return await authPromptInFlight;
+            } finally {
+                authPromptInFlight = null;
+            }
+        }
+
+        async function apiFetch(url, options = {}) {
+            await ensureAuthenticated();
+
+            const fetchOptions = {
+                credentials: 'same-origin',
+                ...options,
+                headers: { ...(options.headers || {}) }
+            };
+
+            let res = await fetch(url, fetchOptions);
+            if (res.status === 401) {
+                await ensureAuthenticated("Your session expired. Enter your LOCK-IN password to continue.");
+                res = await fetch(url, fetchOptions);
+            }
+
+            return res;
+        }
+
         async function refreshData() {
             try {
-                const res = await fetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                const res = await apiFetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`State fetch failed with ${res.status}`);
                 const data = await res.json();
                 if (data) {
                     S = data;
+                    ensureSyncMeta(S);
                     render();
                 }
             } catch (e) {
@@ -174,11 +250,21 @@
 
         async function syncState() {
             try {
-                await fetch('/api/state', {
+                ensureSyncMeta(S);
+                S.syncMeta.localUpdatedAt = nowIso();
+
+                const res = await apiFetch('/api/state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(S)
                 });
+                if (!res.ok) throw new Error(`State save failed with ${res.status}`);
+
+                const result = await res.json();
+                if (result.serverUpdatedAt) {
+                    S.syncMeta.serverUpdatedAt = result.serverUpdatedAt;
+                    S.syncMeta.lastSyncedAt = nowIso();
+                }
                 showToast();
                 render();
             } catch(e) {

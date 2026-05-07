@@ -10,11 +10,15 @@ services:
       - "3001:3001"
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - GEMINI_API_KEY=AIzaSyA-Vt0fA85tFGkowJ_kdr7f21RGtqxmMcM
+      NODE_ENV: production
+      PORT: 3001
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      APP_PASSWORD: ${APP_PASSWORD}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
     restart: unless-stopped
 
   lock-in-gf:
@@ -26,17 +30,22 @@ services:
       - "3333:3001"
     volumes:
       - ./data-gf:/app/data
-      - ./.env:/app/.env
-      - ./icons-gf:/app/icons
+      - ./public/icons-gf:/app/public/icons
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - GEMINI_API_KEY=AIzaSyA-Vt0fA85tFGkowJ_kdr7f21RGtqxmMcM
+      NODE_ENV: production
+      PORT: 3001
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      APP_PASSWORD: ${APP_PASSWORD}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
     restart: unless-stopped
 
   dozzle:
     container_name: dozzle
     image: amir20/dozzle:latest
+    profiles: ["observability"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
@@ -46,6 +55,7 @@ services:
   zabbix:
     image: zabbix/zabbix-appliance:latest
     container_name: zabbix-appliance
+    profiles: ["observability"]
     ports:
       - "8082:80"
       - "10051:10051"

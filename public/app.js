@@ -54,55 +54,174 @@ const RINGS = [
             ];
         }
 
-        // SYNC: Load from Server OR LocalStorage fallback
-        async function loadState() {
-            try {
-                // Use a timestamp to force a fresh fetch from the server
-                const res = await fetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
-                const data = await res.json();
-                if (data) {
-                    // Critical merge: If server data is present, it's our sync source
-                    // But we merge gently to avoid losing very recent local wins
-                    if (data.streak >= S.streak) S.streak = data.streak;
-                    if (data.totalXp >= S.totalXp) S.totalXp = data.totalXp;
-                    
-                    // Always pull history and journal from server as it's the gold source
-                    if (data.history) S.history = data.history;
-                    if (data.journal) S.journal = data.journal;
-                    if (data.schedule) S.schedule = data.schedule;
+        function nowIso() {
+            return new Date().toISOString();
+        }
 
-                    // If server data is from today, it's the source of truth for current progress
-                    const today = new Date().toDateString();
-                    if (data.lastDate === today) {
-                        // Merge server progress with local progress
-                        S = { ...S, ...data };
+        function asTimestamp(value) {
+            const parsed = Date.parse(value || '');
+            return Number.isNaN(parsed) ? 0 : parsed;
+        }
+
+        function ensureSyncMeta(state) {
+            if (!state.syncMeta || typeof state.syncMeta !== 'object') state.syncMeta = {};
+            if (!('localUpdatedAt' in state.syncMeta)) state.syncMeta.localUpdatedAt = null;
+            if (!('serverUpdatedAt' in state.syncMeta)) state.syncMeta.serverUpdatedAt = null;
+            if (!('lastSyncedAt' in state.syncMeta)) state.syncMeta.lastSyncedAt = null;
+            return state;
+        }
+
+        function saveLocalState() {
+            localStorage.setItem('lockin_v3', JSON.stringify(S));
+        }
+
+        function shouldApplyRemoteState(remoteState) {
+            ensureSyncMeta(S);
+            ensureSyncMeta(remoteState);
+
+            const remoteServerUpdatedAt = asTimestamp(remoteState.serverUpdatedAt || remoteState.syncMeta.serverUpdatedAt);
+            const localServerUpdatedAt = asTimestamp(S.syncMeta.serverUpdatedAt);
+
+            if (remoteServerUpdatedAt > localServerUpdatedAt) return true;
+            if (remoteServerUpdatedAt < localServerUpdatedAt) return false;
+
+            return asTimestamp(remoteState.syncMeta.localUpdatedAt) > asTimestamp(S.syncMeta.localUpdatedAt);
+        }
+
+        function applyRemoteState(remoteState, { force = false } = {}) {
+            if (!remoteState) return false;
+
+            ensureSyncMeta(remoteState);
+            if (!force && !shouldApplyRemoteState(remoteState)) {
+                return false;
+            }
+
+            const remoteServerUpdatedAt = remoteState.serverUpdatedAt || remoteState.syncMeta.serverUpdatedAt || null;
+            delete remoteState.serverUpdatedAt;
+
+            S = { ...S, ...remoteState };
+            ensureSyncMeta(S);
+            S.syncMeta.serverUpdatedAt = remoteServerUpdatedAt;
+            S.syncMeta.lastSyncedAt = nowIso();
+            saveLocalState();
+            return true;
+        }
+
+        let authPromptInFlight = null;
+
+        async function ensureAuthenticated(message = "Enter your LOCK-IN password to continue.") {
+            if (authPromptInFlight) return authPromptInFlight;
+
+            authPromptInFlight = (async () => {
+                const statusRes = await fetch('/api/auth/status', {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+
+                if (!statusRes.ok) {
+                    throw new Error(`Auth status failed with ${statusRes.status}`);
+                }
+
+                const status = await statusRes.json();
+                if (!status.authRequired || status.authenticated) {
+                    return true;
+                }
+
+                let promptMessage = message;
+                while (true) {
+                    const password = window.prompt(promptMessage);
+                    if (password === null) {
+                        throw new Error('Authentication cancelled by user');
                     }
-                    renderAll();
+
+                    const loginRes = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+
+                    if (loginRes.ok) {
+                        return true;
+                    }
+
+                    const loginData = await loginRes.json().catch(() => ({}));
+                    promptMessage = loginData.error || 'Incorrect password. Please try again.';
+                    window.alert(promptMessage);
+                }
+            })();
+
+            try {
+                return await authPromptInFlight;
+            } finally {
+                authPromptInFlight = null;
+            }
+        }
+
+        async function apiFetch(url, options = {}) {
+            await ensureAuthenticated();
+
+            const fetchOptions = {
+                credentials: 'same-origin',
+                ...options,
+                headers: { ...(options.headers || {}) }
+            };
+
+            let res = await fetch(url, fetchOptions);
+            if (res.status === 401) {
+                await ensureAuthenticated("Your session expired. Enter your LOCK-IN password to continue.");
+                res = await fetch(url, fetchOptions);
+            }
+
+            return res;
+        }
+
+        ensureSyncMeta(S);
+
+        // SYNC: Load from Server OR LocalStorage fallback
+        async function loadState(force = false) {
+            try {
+                const res = await apiFetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+                const data = await res.json();
+
+                if (data && applyRemoteState(data, { force })) {
                     console.log("State synced from server successfully.");
                 }
+
+                renderAll();
             } catch (e) {
                 console.warn("Sync failed, using offline cache.");
-                // LocalStorage is already loaded into S at the top, so we just use it
+                renderAll();
             }
         }
 
         async function save() {
-            localStorage.setItem('lockin_v3', JSON.stringify(S));
+            ensureSyncMeta(S);
+            S.syncMeta.localUpdatedAt = nowIso();
+            saveLocalState();
             
-            // Show a visual hint that we are syncing
             console.log("Syncing to server...");
             
             try {
-                const res = await fetch('/api/state', {
+                const payload = JSON.parse(JSON.stringify(S));
+                const res = await apiFetch('/api/state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(S)
+                    body: JSON.stringify(payload)
                 });
                 if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+
+                const result = await res.json();
+                if (result.serverUpdatedAt) {
+                    S.syncMeta.serverUpdatedAt = result.serverUpdatedAt;
+                    S.syncMeta.lastSyncedAt = nowIso();
+                    saveLocalState();
+                }
+
                 console.log("Sync complete.");
             } catch (e) { 
                 console.error("Sync save failed:", e);
-                // Hint: If this happens, the JSON might still be too large or network is down
             }
         }
 
@@ -140,21 +259,13 @@ const RINGS = [
         // AUTO-SYNC: Check for updates every 10 seconds (less aggressive to avoid conflicts)
         setInterval(async () => {
             try {
-                const res = await fetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                const res = await apiFetch(`/api/state?t=${Date.now()}`, { cache: 'no-store' });
+                if (!res.ok) return;
                 const data = await res.json();
-                
-                // Compare timestamps or hash to see if we truly need an update
-                if (data && JSON.stringify(data) !== JSON.stringify(S)) {
-                    // Check if server is actually "ahead" or just different
-                    // If server has more XP or higher streak, or it's a new day, we update
-                    const serverIsNewer = (data.totalXp > S.totalXp) || (data.streak > S.streak);
-                    
-                    if (serverIsNewer) {
-                        console.log("Global Sync: Server has newer progress. Updating...");
-                        S = { ...S, ...data };
-                        renderAll();
-                        localStorage.setItem('lockin_v3', JSON.stringify(S));
-                    }
+
+                if (data && applyRemoteState(data)) {
+                    console.log("Global Sync: Server has newer state. Updating...");
+                    renderAll();
                 }
             } catch (e) {}
         }, 10000);
@@ -166,7 +277,7 @@ const RINGS = [
             
             try {
                 // 1. Wipe server data
-                const res = await fetch('/api/reset', { method: 'POST' });
+                const res = await apiFetch('/api/reset', { method: 'POST' });
                 const result = await res.json();
                 
                 if (result.success) {
@@ -197,10 +308,11 @@ const RINGS = [
                         history: {}, journal: {}, schedule: [], longTermGoals: [],
                         workoutLogs: [], currentWorkoutDate: new Date().toDateString()
                     };
+                    ensureSyncMeta(S);
                     
                     // 3. Clear localStorage and re-save
                     localStorage.removeItem('lockin_v3');
-                    save();
+                    await save();
                     
                     // 4. Force reload to ensure everything is fresh
                     window.location.reload();
@@ -332,22 +444,96 @@ const RINGS = [
             save(); renderAll();
         }
 
-        function addAIWorkoutLog(data) {
+        function getWorkoutLogsForExercise(exerciseName) {
+            const logs = (S.workoutLogs || [])
+                .filter(l => l.exercise.toLowerCase() === exerciseName.toLowerCase() && l.date === S.currentWorkoutDate)
+                .sort((a, b) => {
+                    const aSet = Number.isFinite(Number(a.setNumber)) ? Number(a.setNumber) : Number.MAX_SAFE_INTEGER;
+                    const bSet = Number.isFinite(Number(b.setNumber)) ? Number(b.setNumber) : Number.MAX_SAFE_INTEGER;
+                    if (aSet !== bSet) return aSet - bSet;
+                    return (a.id || 0) - (b.id || 0);
+                });
+
+            return logs.map((log, index) => ({
+                ...log,
+                setNumber: Number.isFinite(Number(log.setNumber)) ? Number(log.setNumber) : index + 1
+            }));
+        }
+
+        function getNextWorkoutSetNumber(exerciseName) {
+            const usedSetNumbers = new Set(getWorkoutLogsForExercise(exerciseName).map(log => log.setNumber));
+            let nextSetNumber = 1;
+            while (usedSetNumbers.has(nextSetNumber)) nextSetNumber++;
+            return nextSetNumber;
+        }
+
+        function getDefaultWorkoutReps(targetScheme) {
+            const setMatch = (targetScheme || '').match(/[×x]\s*(\d+)/);
+            if (setMatch) return setMatch[1];
+
+            const firstNumberMatch = (targetScheme || '').match(/(\d+)/);
+            return firstNumberMatch ? firstNumberMatch[1] : '1';
+        }
+
+        function removeXP(amt, src) {
+            S.xpToday = Math.max(0, S.xpToday - amt);
+            S.totalXp = Math.max(0, S.totalXp - amt);
+            S.weekXp[6] = S.xpToday;
+            if (src) S.xpBreakdown[src] = Math.max(0, (S.xpBreakdown[src] || 0) - amt);
+        }
+
+        function addWorkoutLog(data) {
             if (!data.exercise || !data.reps) return;
             if (!S.workoutLogs) S.workoutLogs = [];
+
             S.workoutLogs.push({
                 id: Date.now(),
                 date: S.currentWorkoutDate,
                 split: S.currentSplit,
                 exercise: data.exercise,
+                setNumber: data.setNumber || getNextWorkoutSetNumber(data.exercise),
                 reps: data.reps,
                 weight: data.weight || '',
                 rpe: data.rpe || '',
                 zone: data.zone || '',
                 notes: data.notes || ''
             });
+
             addXP(15, 'todos'); // XP for logging a set
-            save(); renderWorkout();
+            save();
+            renderWorkout();
+        }
+
+        function removeWorkoutLog(exerciseName, setNumber) {
+            const existingLog = getWorkoutLogsForExercise(exerciseName).find(log => log.setNumber === setNumber);
+            if (!existingLog) return;
+
+            S.workoutLogs = (S.workoutLogs || []).filter(log => log.id !== existingLog.id);
+            removeXP(15, 'todos');
+            save();
+            renderWorkout();
+        }
+
+        function addAIWorkoutLog(data) {
+            if (!data.exercise || !data.reps) return;
+            addWorkoutLog({
+                ...data,
+                setNumber: data.setNumber || getNextWorkoutSetNumber(data.exercise)
+            });
+        }
+
+        function toggleWorkoutSet(exerciseName, setNumber, targetScheme) {
+            const existingLog = getWorkoutLogsForExercise(exerciseName).find(log => log.setNumber === setNumber);
+            if (existingLog) {
+                removeWorkoutLog(exerciseName, setNumber);
+                return;
+            }
+
+            addWorkoutLog({
+                exercise: exerciseName,
+                setNumber,
+                reps: getDefaultWorkoutReps(targetScheme)
+            });
         }
 
         function toggleHabit(id) {
@@ -550,7 +736,7 @@ const RINGS = [
                 
                 try {
                     // 2. Upload the compressed image to the server
-                    const res = await fetch('/api/upload-photo', {
+                    const res = await apiFetch('/api/upload-photo', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ image: compressed })
@@ -670,7 +856,7 @@ const RINGS = [
             const reader = new FileReader();
             reader.onload = async function(e) {
                 try {
-                    const res = await fetch('/api/analyze-meal', {
+                    const res = await apiFetch('/api/analyze-meal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
@@ -884,7 +1070,7 @@ const RINGS = [
             container.scrollTop = container.scrollHeight;
 
             try {
-                const res = await fetch('/api/ai-coach', {
+                const res = await apiFetch('/api/ai-coach', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -1285,21 +1471,21 @@ const RINGS = [
                 if(e.s.includes('×')) sNum = parseInt(e.s.split('×')[0]) || 3;
                 else if(e.s.includes('x')) sNum = parseInt(e.s.split('x')[0]) || 3;
                 
-                const exLogs = (S.workoutLogs || []).filter(l => l.exercise.toLowerCase() === e.n.toLowerCase() && l.date === S.currentWorkoutDate);
+                const exLogs = getWorkoutLogsForExercise(e.n);
 
                 let nodesHTML = '';
                 for(let i=0; i<sNum; i++) {
-                    const log = exLogs[i]; // get the log for set i
+                    const log = exLogs.find(entry => entry.setNumber === i + 1);
                     if (log) {
-                        nodesHTML += `<div class="set-node completed" title="RPE: ${log.rpe || '-'}, Zone: ${log.zone || '-'} | ${log.notes || ''}" style="background:#7c6fff; border-color:#7c6fff; color:#fff;" onclick="alert('Set ${i+1}: ${log.reps} reps @ ${log.weight || 'BW'}\\nRPE: ${log.rpe || '-'}\\nZone: ${log.zone || '-'}\\nNotes: ${log.notes || 'None'}')">✓</div>`;
+                        nodesHTML += `<div class="set-node completed" title="Tap to remove set ${log.setNumber}" style="background:#7c6fff; border-color:#7c6fff; color:#fff;" onclick='toggleWorkoutSet(${JSON.stringify(e.n)}, ${i + 1}, ${JSON.stringify(e.s)})'>✓</div>`;
                     } else {
-                        nodesHTML += `<div class="set-node" onclick="alert('Tap the Microphone (🎤) in the AI Coach tab to hands-free log this set!')"></div>`;
+                        nodesHTML += `<div class="set-node" onclick='toggleWorkoutSet(${JSON.stringify(e.n)}, ${i + 1}, ${JSON.stringify(e.s)})'></div>`;
                     }
                 }
 
-                let logsHTML = exLogs.map((log, i) => `
+                let logsHTML = exLogs.map(log => `
                     <div style="font-size:11px; color:var(--muted); margin-top:4px; padding-left:12px; border-left: 2px solid #7c6fff; margin-bottom:4px;">
-                        Set ${i+1}: ${log.reps} reps${log.weight ? ' @ '+log.weight : ''} 
+                        Set ${log.setNumber}: ${log.reps} reps${log.weight ? ' @ '+log.weight : ''} 
                         <span style="background:var(--bg3); padding:2px 6px; border-radius:4px; font-size:9px; margin-left:6px; color:#fff; border:1px solid #333;">RPE ${log.rpe || '-'}</span>
                         <span style="background:var(--bg3); padding:2px 6px; border-radius:4px; font-size:9px; margin-left:4px; color:#fff; border:1px solid #333;">Zone ${log.zone || '-'}</span>
                         ${log.notes ? `<br><span style="color:#a090ff; display:inline-block; margin-top:4px;">↳ Coach Note: ${log.notes}</span>` : ''}
